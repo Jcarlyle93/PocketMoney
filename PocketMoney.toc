@@ -1,0 +1,9 @@
+## Interface: 11500
+## Title: Pocket Money
+## Notes: Tracks gold made from pickpocketing
+## Author: Worlds best rogue Indelible@Discord
+## SavedVariables: PocketMoneyDB
+
+## Made for Wibber, you're welcome.
+
+PocketMoney.lua
