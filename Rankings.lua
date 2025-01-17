@@ -25,16 +25,18 @@ end
 local updateCooldown = 300
 local lastUpdateSent = 0
 local ADDON_PREFIX = "PMRank"
-C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
+if not C_ChatInfo.IsAddonMessagePrefixRegistered(ADDON_PREFIX) then
+  C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
+end
 
 function PocketMoneyRankings.SendUpdate()
   local currentTime = GetTime()
+  local realmName = GetRealmName()
+  local playerName = UnitName("player")
+
   if currentTime - lastUpdateSent < updateCooldown then
     return
   end
-
-  local realmName = GetRealmName()
-  local playerName = UnitName("player")
 
   if not PocketMoneyDB[realmName] or not PocketMoneyDB[realmName][playerName] then
     return
@@ -51,30 +53,51 @@ function PocketMoneyRankings.SendUpdate()
     )
   }
 
-  local serialized = LibStub("LibSerialize"):Serialize(messageData)
-  C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
-  lastUpdateSent = currentTime
+  local LibSerialize = LibStub("LibSerialize")
+    local success, serialized = pcall(function() return LibSerialize:Serialize(messageData) end)
+    if success then
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
+    end
+    lastUpdateSent = GetTime()
 end
 
 function PocketMoneyRankings.ProcessUpdate(sender, data)
-  local success, messageData = LibStub("LibSerialize"):Deserialize(data)
-  if not success then
+  local LibSerialize = LibStub("LibSerialize")
+  local success, messageData = pcall(function() return LibSerialize:Deserialize(data) end)
+  
+  if not success or type(messageData) ~= "table" then
     return
   end
-
+  
   local realmName = messageData.realm
   local playerName = messageData.player
 
-  if not PocketMoneySecurity.verifyIntegrity(realmName, playerName, messageData.gold, 0, messageData.checksum) then
-    return
-  end
+  if realmName and playerName and messageData.gold then
+    local numMembers = GetNumGuildMembers()
+    local isRogue = false
+    
+    for i = 1, numMembers do
+      local name, _, _, _, _, _, _, _, _, _, class = GetGuildRosterInfo(i)
+      if name and name:match("^([^-]+)") == playerName then
+        if class == "Rogue" then
+          isRogue = true
+          break
+        end
+      end
+    end
 
-  local existingData = PocketMoneyDB[realmName].guildRankings[playerName]
-  if not existingData or existingData.timestamp < messageData.timestamp then
-    PocketMoneyDB[realmName].guildRankings[playerName] = {
-      gold = messageData.gold,
-      timestamp = messageData.timestamp
-    }
+    if isRogue then
+      PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
+      PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
+
+      local existingData = PocketMoneyDB[realmName].guildRankings[playerName]
+      if not existingData or existingData.timestamp < messageData.timestamp then
+        PocketMoneyDB[realmName].guildRankings[playerName] = {
+          gold = messageData.gold,
+          timestamp = messageData.timestamp
+        }
+      end
+    end
   end
 end
 
@@ -110,8 +133,8 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     end
   elseif event == "CHAT_MSG_ADDON" then
     local prefix, message, channel, sender = ...
-    if prefix == ADDON_PREFIX and channel == "GUILD" then
-       PocketMoneyRankings.ProcessUpdate(sender, message)
+    if channel == "GUILD" then
+        PocketMoneyRankings.ProcessUpdate(sender, message)
     end
   elseif event == "PLAYER_LOGOUT" then
     PocketMoneyRankings.SendUpdate()
