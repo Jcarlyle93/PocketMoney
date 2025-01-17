@@ -7,12 +7,21 @@ local function debug(msg)
   print("PCM Debug: " .. tostring(msg))
 end
 
-PocketMoneyDB = PocketMoneyDB or {
+-- Get realm and player info
+local realmName = GetRealmName()
+local playerName = UnitName("player")
+
+-- Initialize DB structure
+PocketMoneyDB = PocketMoneyDB or {}
+PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
+PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
   lifetimeGold = 0,
   lifetimeJunk = 0,
   checksum = nil
 }
+PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 
+-- Session variables
 local sessionGold = 0
 local sessionJunk = 0
 local isPickpocketLoot = false
@@ -23,9 +32,12 @@ local sessionStartTime = GetServerTime()
 local maxGoldPerHour = 100 * 10000 
 
 local function updateValues(gold, junk)
-  PocketMoneyDB.lifetimeGold = gold
-  PocketMoneyDB.lifetimeJunk = junk
-  PocketMoneyDB.checksum = Security.generateChecksum(gold, junk)
+  PocketMoneyDB[realmName][playerName].lifetimeGold = gold
+  PocketMoneyDB[realmName][playerName].lifetimeJunk = junk
+  PocketMoneyDB[realmName][playerName].checksum = PocketMoneySecurity.generateChecksum(
+    PocketMoneyDB[realmName][playerName].lifetimeGold, 
+    PocketMoneyDB[realmName][playerName].lifetimeJunk
+  )
 end
 
 local function parseMoneyString(moneyStr)
@@ -77,7 +89,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
           if itemSellPrice then
             local totalValue = itemSellPrice * (quantity or 1)
             sessionJunk = sessionJunk + totalValue
-            PocketMoneyDB.lifetimeJunk = PocketMoneyDB.lifetimeJunk + totalValue
+            PocketMoneyDB[realmName][playerName].lifetimeJunk = PocketMoneyDB[realmName][playerName].lifetimeJunk + totalValue
             lastProcessedItems[itemLink] = true
           end
         end
@@ -85,12 +97,12 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
         if item and item ~= lastProcessedMoney then
           local copper = parseMoneyString(item)
           sessionGold = sessionGold + copper
-          PocketMoneyDB.lifetimeGold = PocketMoneyDB.lifetimeGold + copper
+          PocketMoneyDB[realmName][playerName].lifetimeGold = PocketMoneyDB[realmName][playerName].lifetimeGold + copper
           lastProcessedMoney = item
 
-          PocketMoneyDB.guildRankings = PocketMoneyDB.guildRankings or {}
-          PocketMoneyDB.guildRankings[UnitName("player")] = {
-            gold = PocketMoneyDB.lifetimeGold,
+          -- Update rankings
+          PocketMoneyDB[realmName].guildRankings[playerName] = {
+            gold = PocketMoneyDB[realmName][playerName].lifetimeGold,
             timestamp = GetServerTime()
           }
         end
@@ -99,7 +111,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
   end
 end)
 
-PocketMoneyCore = {}  -- Create core table
+PocketMoneyCore = {}
 
 function PocketMoneyCore.FormatMoney(copper)
   local gold = math.floor(copper / 10000)
@@ -113,48 +125,44 @@ function PocketMoneyCore.FormatMoney(copper)
   return str
 end
 
--- Modify the slash command to handle rankings
 SLASH_POCKETMONEY1 = "/pm"
 SlashCmdList["POCKETMONEY"] = function(msg)
   if msg == "clear" then
-    PocketMoneyDB.lifetimeGold = 0
-    PocketMoneyDB.lifetimeJunk = 0
+    PocketMoneyDB[realmName][playerName].lifetimeGold = 0
+    PocketMoneyDB[realmName][playerName].lifetimeJunk = 0
     sessionGold = 0
     sessionJunk = 0
-    PocketMoneyDB.checksum = PocketMoneySecurity.generateChecksum(0, 0)
+    PocketMoneyDB[realmName][playerName].checksum = PocketMoneySecurity.generateChecksum(0, 0)
     print("Pocket Money: All statistics cleared!")
     return
   elseif msg == "rankings" or msg == "rank" then
     PocketMoneyRankings.ToggleUI()
     return
   elseif msg == "testrank" then
-    -- Add fake data
-    PocketMoneyDB.guildRankings = PocketMoneyDB.guildRankings or {}
-    PocketMoneyDB.guildRankings["Stabby"] = {
-        gold = 250000,  -- 25g
-        timestamp = GetServerTime()
+    -- Add test data using realm structure
+    PocketMoneyDB[realmName].guildRankings["Stabby"] = {
+      gold = 250000,  -- 25g
+      timestamp = GetServerTime()
     }
-    PocketMoneyDB.guildRankings["Sneakster"] = {
-        gold = 100000,  -- 10g
-        timestamp = GetServerTime()
+    PocketMoneyDB[realmName].guildRankings["Sneakster"] = {
+      gold = 100000,  -- 10g
+      timestamp = GetServerTime()
     }
-    PocketMoneyDB.guildRankings["ShadowBlade"] = {
-        gold = 500000,  -- 50g
-        timestamp = GetServerTime()
+    PocketMoneyDB[realmName].guildRankings["ShadowBlade"] = {
+      gold = 500000,  -- 50g
+      timestamp = GetServerTime()
     }
-    PocketMoneyDB.guildRankings["PocketPicker"] = {
-        gold = 150000,  -- 15g
-        timestamp = GetServerTime()
+    PocketMoneyDB[realmName].guildRankings["PocketPicker"] = {
+      gold = 150000,  -- 15g
+      timestamp = GetServerTime()
     }
     print("Added test ranking data")
     PocketMoneyRankings.ToggleUI()
     return
   elseif msg == "cleartestdata" then
-    -- Keep only the player's own data
-    local playerName = UnitName("player")
-    local playerData = PocketMoneyDB.guildRankings[playerName]
-    PocketMoneyDB.guildRankings = {}
-    PocketMoneyDB.guildRankings[playerName] = playerData
+    local playerData = PocketMoneyDB[realmName].guildRankings[playerName]
+    PocketMoneyDB[realmName].guildRankings = {}
+    PocketMoneyDB[realmName].guildRankings[playerName] = playerData
     print("Test ranking data cleared")
     PocketMoneyRankings.ToggleUI()
     return
@@ -168,8 +176,8 @@ SlashCmdList["POCKETMONEY"] = function(msg)
 
   print("----------------------------------------")
   print("|cFF9370DB[Lifetime]|r:")
-  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB.lifetimeGold))
-  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB.lifetimeJunk))
+  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeGold))
+  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeJunk))
   print("|cFF00FF00[Session]|r:")
   print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
   print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
