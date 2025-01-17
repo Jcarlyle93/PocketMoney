@@ -22,53 +22,10 @@ local lastLootTime = 0
 local sessionStartTime = GetServerTime()
 local maxGoldPerHour = 100 * 10000 
 
-local function generateSalt()
-  local serverTime = GetServerTime()
-  local playerGUID = UnitGUID("player")
-  local realmName = GetRealmName()
-  local characterName = UnitName("player")
-  local characterLevel = UnitLevel("player")
-  local baseString = "PM" .. playerGUID .. realmName .. characterName .. characterLevel .. serverTime
-  local complexSalt = ""
-  local reversed = string.reverse(baseString)
-  
-  for i = 1, #baseString do
-    if i % 2 == 0 then
-      complexSalt = complexSalt .. string.sub(baseString, i, i)
-    else
-      complexSalt = complexSalt .. string.sub(reversed, i, i)
-    end
-  end
-  
-  return complexSalt
-end
-
-local function generateChecksum(gold, junk)
-  local salt = generateSalt()
-  local combined = gold .. ":" .. junk .. ":" .. salt
-  return LibStub("SHA256-1.0"):Hash(combined)
-end
-
 local function updateValues(gold, junk)
   PocketMoneyDB.lifetimeGold = gold
   PocketMoneyDB.lifetimeJunk = junk
-  PocketMoneyDB.checksum = generateChecksum(gold, junk)
-end
-
-local function verifyIntegrity()
-  local currentChecksum = generateChecksum(PocketMoneyDB.lifetimeGold, PocketMoneyDB.lifetimeJunk)
-  return currentChecksum == PocketMoneyDB.checksum
-end
-
-local function logTransaction(amount, type, timestamp)
-  PocketMoneyDB.transactions = PocketMoneyDB.transactions or {}
-  table.insert(PocketMoneyDB.transactions, {
-    amount = amount,
-    type = type,
-    timestamp = timestamp,
-    playerLevel = UnitLevel("player"),
-    zone = GetRealZoneText()
-  })
+  PocketMoneyDB.checksum = Security.generateChecksum(gold, junk)
 end
 
 local function parseMoneyString(moneyStr)
@@ -155,7 +112,7 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     PocketMoneyDB.lifetimeJunk = 0
     sessionGold = 0
     sessionJunk = 0
-    PocketMoneyDB.checksum = generateChecksum(0, 0)
+    PocketMoneyDB.checksum = Security.generateChecksum(0, 0)
     print("Pocket Money: All statistics cleared!")
     return
   end
