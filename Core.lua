@@ -125,9 +125,6 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("Pocket Money: All statistics cleared!")
     return
   elseif msg == "rankings" or msg == "rank" then
-    PocketMoneyRankings.ShowRankings()
-    return
-  elseif msg == "rankui" then
     PocketMoneyRankings.ToggleUI()
     return
   elseif msg == "testrank" then
