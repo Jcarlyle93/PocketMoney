@@ -55,78 +55,55 @@ end
 
 -- Recieve
 function PocketMoneyRankings.ProcessUpdate(sender, data)
-  print("PCM Debug: 1. Received message from", sender)
   if sender:match("^" .. UnitName("player") .. "-") then
-    print("PCM Debug: 2. Ignoring own message")
     return
   end
   
   local LibSerialize = LibStub("LibSerialize")
   local success, messageData = pcall(function() 
     local decoded, result = LibSerialize:Deserialize(data)
-    print("PCM Debug: Deserialized data contains:")
-    print("  Player:", result.player)
-    print("  Realm:", result.realm)
-    print("  Gold:", result.gold)
     return result
   end)
   
   if not success then
-    print("PCM Debug: 4. Deserialization failed")
     return
   end
 
   if type(messageData) ~= "table" then
-    print("PCM Debug: 5. Invalid message format")
     return
   end
 
   if messageData.type == "DATA_REQUEST" then
-    print("PCM Debug: 6. Got data request")
     PocketMoneyRankings.SendUpdate()
     return
   end
 
   if messageData.type ~= "PLAYER_UPDATE" then
-    print("PCM Debug: 7. Invalid message type:", messageData.type)
     return
   end
 
   local isRogue = false
   local numMembers = GetNumGuildMembers()
-  print("PCM Debug: 8. Checking", numMembers, "guild members")
-  print("PCM Debug: Looking for player:", messageData.player)
   
   for i = 1, numMembers do
       local name, _, _, _, _, _, _, _, _, _, class = GetGuildRosterInfo(i)
       local guildMemberName = name:match("^([^-]+)")
       
       if guildMemberName == messageData.player and class == "ROGUE" then
-          print("PCM Debug: 9. Found rogue:", name)
           isRogue = true
           break
       end
   end
 
   if not isRogue then
-    print("PCM Debug: 10. Not a rogue")
     return
   end
 
   local realmName = messageData.realm
   local playerName = messageData.player
 
-  print("PCM Debug: 11. Adding rogue data:", playerName, messageData.gold)
-  print("PCM Debug: Storing data for", playerName, "in realm", realmName)
-
-  -- Initialize realm data structure if needed
   PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
   PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
-
-  print("PCM Debug: Current rankings table contents:")
-  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
-    print(player, data.gold)
-  end
 
   local existingData = PocketMoneyDB[realmName].guildRankings[playerName]
   if not existingData or existingData.timestamp < messageData.timestamp then
@@ -134,22 +111,12 @@ function PocketMoneyRankings.ProcessUpdate(sender, data)
       gold = messageData.gold,
       timestamp = messageData.timestamp
     }
-    print("PCM Debug: Successfully stored data for", playerName)
   end
 end
 
 function PocketMoneyRankings.ShowRankings()
   local rankings = {}
   local realmName = GetRealmName()
-  print("PCM Debug: Showing rankings for realm:", realmName)
-  print("PCM Debug: Rankings table contents:")
-  if PocketMoneyDB[realmName] and PocketMoneyDB[realmName].guildRankings then
-    for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
-      print(player, data.gold)
-    end
-  else
-    print("No rankings data found")
-  end
 
   for player, data in pairs(PocketMoneyDB[realmName].guildRankings or {}) do
     table.insert(rankings, {player = player, gold = data.gold})
