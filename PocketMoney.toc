@@ -2,7 +2,7 @@
 ## Title: Pocket Money
 ## Notes: Tracks gold made from pickpocketing
 ## Author: Worlds best rogue Indelible@Discord
-## SavedVariables: PocketMoneyDB
+## SavedVariablesPerCharacter: PocketMoneyDB
 
 ## Made for Wibber, you're welcome.
 
