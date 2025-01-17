@@ -24,7 +24,12 @@ end
 function PocketMoneySecurity.generateChecksum(gold, junk)
   local salt = PocketMoneySecurity.generateSalt()
   local combined = gold .. ":" .. junk .. ":" .. salt
-  return LibStub("SHA256-1.0"):Hash(combined)
+  local hash = 5381
+  for i = 1, #combined do
+    hash = ((hash * 33) + string.byte(combined, i)) % 4294967296
+  end
+  
+  return tostring(hash)
 end
 
 function PocketMoneySecurity.verifyIntegrity(gold, junk, checksum)
