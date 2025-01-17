@@ -4,11 +4,16 @@ local function InitializeRankings()
   PocketMoneyDB = PocketMoneyDB or {}
   PocketMoneyDB.guildRankings = PocketMoneyDB.guildRankings or {}
   local playerName = UnitName("player")
-  if not PocketMoneyDB.guildRankings[playerName] then
-      PocketMoneyDB.guildRankings[playerName] = {
-          gold = PocketMoneyDB.lifetimeGold or 0,
-          timestamp = GetServerTime()
-      }
+  local _, playerClass = UnitClass("player")
+  print(playerClass)
+  if playerClass == "ROGUE" then
+    print(playerClass)
+    if not PocketMoneyDB.guildRankings[playerName] then
+        PocketMoneyDB.guildRankings[playerName] = {
+            gold = PocketMoneyDB.lifetimeGold or 0,
+            timestamp = GetServerTime()
+        }
+    end
   end
 end
 
@@ -32,6 +37,7 @@ function PocketMoneyRankings.SendUpdate()
   }
 
   local serialized = LibStub("LibSerialize"):Serialize(messageData)
+  print(ADDON_PREFIX, serialized, "GUILD")
   C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
   lastUpdateSent = currentTime
 end
@@ -65,17 +71,18 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
       local addonName = ...
       if addonName == "PocketMoney" then
-          InitializeRankings()
+        InitializeRankings()
       end
   elseif event == "CHAT_MSG_ADDON" then
       local prefix, message, channel, sender = ...
       if prefix == ADDON_PREFIX and channel == "GUILD" then
-          PocketMoneyRankings.ProcessUpdate(sender, message)
+        PocketMoneyRankings.ProcessUpdate(sender, message)
       end
   elseif event == "PLAYER_LOGOUT" then
-      PocketMoneyRankings.SendUpdate()
+    PocketMoneyRankings.SendUpdate()
   elseif event == "PLAYER_ENTERING_WORLD" then
-      C_Timer.After(5, PocketMoneyRankings.SendUpdate)
+    InitializeRankings()
+    C_Timer.After(5, PocketMoneyRankings.SendUpdate)
   end
 end)
 
