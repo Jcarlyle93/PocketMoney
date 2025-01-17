@@ -149,6 +149,15 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("Added test ranking data")
     PocketMoneyRankings.ToggleUI()
     return
+  elseif msg == "cleartestdata" then
+    -- Keep only the player's own data
+    local playerName = UnitName("player")
+    local playerData = PocketMoneyDB.guildRankings[playerName]
+    PocketMoneyDB.guildRankings = {}
+    PocketMoneyDB.guildRankings[playerName] = playerData
+    print("Test ranking data cleared")
+    PocketMoneyRankings.ToggleUI()
+    return
   elseif msg == "help" then
     print("Pocket Money Commands:")
     print("  /pm - Show current statistics")
