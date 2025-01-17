@@ -37,7 +37,6 @@ function PocketMoneyRankings.SendUpdate()
   }
 
   local serialized = LibStub("LibSerialize"):Serialize(messageData)
-  print(ADDON_PREFIX, serialized, "GUILD")
   C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
   lastUpdateSent = currentTime
 end
