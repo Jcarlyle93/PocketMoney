@@ -1,9 +1,9 @@
 ## Interface: 11500
-## Title: Pocket Money
+## Title: PocketMoney
 ## Notes: Tracks gold made from pickpocketing
 ## Author: Worlds best rogue Indelible@Discord
 ## SavedVariables: PocketMoneyDB
-## Version: 1.1-beta
+## Version: 1.2-beta
 ## X-Credits: LibSerialize by Ross Nichols
 
 ## Made for Wibber, you're welcome.
