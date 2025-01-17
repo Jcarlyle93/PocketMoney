@@ -37,12 +37,14 @@ function PocketMoneySecurity.verifyIntegrity(gold, junk, checksum)
   return currentChecksum == checksum
 end
 
-function PocketMoneySecurity.logTransaction(amount, type, timestamp)
-  PocketMoneyDB.transactions = PocketMoneyDB.transactions or {}
-  table.insert(PocketMoneyDB.transactions, {
+function PocketMoneySecurity.logTransaction(realmName, playerName, amount, type, timestamp)
+  local realmData = PocketMoneyDB[realmName] or {}
+  realmData.transactions = realmData.transactions or {}
+  table.insert(realmData.transactions, {
     amount = amount,
     type = type,
     timestamp = timestamp,
+    player = playerName,
     playerLevel = UnitLevel("player"),
     zone = GetRealZoneText()
   })

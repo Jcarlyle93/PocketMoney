@@ -43,6 +43,8 @@ local contentFrame = CreateFrame("Frame", nil, RankingsUI)
 contentFrame:SetPoint("TOPLEFT", 20, -30)
 contentFrame:SetPoint("BOTTOMRIGHT", -20, 10)
 
+tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
+
 PocketMoneyRankings.ToggleUI = function()
     if RankingsUI:IsShown() then
         RankingsUI:Hide()
@@ -53,14 +55,18 @@ PocketMoneyRankings.ToggleUI = function()
 end
 
 PocketMoneyRankings.UpdateUI = function()
+  local realmName = GetRealmName()
+  
+  if not PocketMoneyDB or not PocketMoneyDB[realmName] or not PocketMoneyDB[realmName].guildRankings then return end
+
   for _, child in ipairs({contentFrame:GetChildren()}) do
-      child:Hide()
-      child:SetParent(nil)
+    child:Hide()
+    child:SetParent(nil)
   end
   
   local rankings = {}
-  for player, data in pairs(PocketMoneyDB.guildRankings) do
-      table.insert(rankings, {player = player, gold = data.gold})
+  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
+    table.insert(rankings, {player = player, gold = data.gold})
   end
   table.sort(rankings, function(a, b) return a.gold > b.gold end)
   
@@ -69,41 +75,35 @@ PocketMoneyRankings.UpdateUI = function()
     entryFrame:SetSize(260, 20)
     entryFrame:SetPoint("TOPLEFT", 0, -((i-1) * 25))
     
-    -- Basic alternating backgrounds
     if i % 2 == 0 then
-        entryFrame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            tile = true,
-            tileSize = 16
-        })
-        entryFrame:SetBackdropColor(0.2, 0.2, 0.2, 0.3)
+      entryFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        tile = true,
+        tileSize = 16
+      })
+      entryFrame:SetBackdropColor(0.2, 0.2, 0.2, 0.3)
     else
-        entryFrame:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            tile = true,
-            tileSize = 16
-        })
-        entryFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.2)
-    end
-    
-    -- Special borders for top 3
-    if i <= 3 then
-        local border = entryFrame:CreateTexture(nil, "OVERLAY")
-        border:SetPoint("TOPLEFT", -2, 2)
-        border:SetPoint("BOTTOMRIGHT", 2, -2)
-        
-        if i == 1 then
-            -- Gold
-            border:SetColorTexture(1, 0.84, 0, 0.3)
-        elseif i == 2 then
-            -- Silver
-            border:SetColorTexture(0.75, 0.75, 0.75, 0.3)
-        elseif i == 3 then
-            -- Bronze
-            border:SetColorTexture(0.8, 0.5, 0.2, 0.3)
-        end
+      entryFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        tile = true,
+        tileSize = 16
+      })
+      entryFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.2)
     end
 
+    if i <= 3 then
+      local border = entryFrame:CreateTexture(nil, "BORDER")
+      border:SetAllPoints()
+      
+      if i == 1 then
+        border:SetColorTexture(1, 0.84, 0, 0.3)
+      elseif i == 2 then
+        border:SetColorTexture(0.75, 0.75, 0.75, 0.3)
+      elseif i == 3 then
+        border:SetColorTexture(0.8, 0.5, 0.2, 0.3) 
+      end
+    end
+    
     local rankText = entryFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     rankText:SetPoint("LEFT", 5, 0)
     rankText:SetText(i .. ".")
@@ -116,4 +116,11 @@ PocketMoneyRankings.UpdateUI = function()
     goldText:SetPoint("RIGHT", -5, 0)
     goldText:SetText(PocketMoneyCore.FormatMoney(data.gold))
   end
+
+  RankingsUI:RegisterEvent("PLAYER_REGEN_DISABLED")  -- Fires when entering combat
+  RankingsUI:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_DISABLED" then
+      RankingsUI:Hide()
+    end
+  end)
 end
