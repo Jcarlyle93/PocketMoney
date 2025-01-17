@@ -87,42 +87,85 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
           sessionGold = sessionGold + copper
           PocketMoneyDB.lifetimeGold = PocketMoneyDB.lifetimeGold + copper
           lastProcessedMoney = item
+
+          PocketMoneyDB.guildRankings = PocketMoneyDB.guildRankings or {}
+          PocketMoneyDB.guildRankings[UnitName("player")] = {
+            gold = PocketMoneyDB.lifetimeGold,
+            timestamp = GetServerTime()
+          }
         end
       end
     end
   end
 end)
 
+PocketMoneyCore = {}  -- Create core table
+
+function PocketMoneyCore.FormatMoney(copper)
+  local gold = math.floor(copper / 10000)
+  local silver = math.floor((copper % 10000) / 100)
+  local copperRem = copper % 100
+  local str = ""
+  if gold > 0 then str = str .. "|cFFFFD700" .. gold .. "g|r " end
+  if silver > 0 or gold > 0 then str = str .. "|cFFC0C0C0" .. silver .. "s|r " end
+  str = str .. "|cFFB87333" .. copperRem .. "c|r"
+  
+  return str
+end
+
+-- Modify the slash command to handle rankings
 SLASH_POCKETMONEY1 = "/pm"
 SlashCmdList["POCKETMONEY"] = function(msg)
-  local function formatMoney(copper)
-    local gold = math.floor(copper / 10000)
-    local silver = math.floor((copper % 10000) / 100)
-    local copperRem = copper % 100
-    local str = ""
-    if gold > 0 then str = str .. "|cFFFFD700" .. gold .. "g|r " end
-    if silver > 0 or gold > 0 then str = str .. "|cFFC0C0C0" .. silver .. "s|r " end
-    str = str .. "|cFFB87333" .. copperRem .. "c|r"
-    
-    return str
-  end
-
   if msg == "clear" then
     PocketMoneyDB.lifetimeGold = 0
     PocketMoneyDB.lifetimeJunk = 0
     sessionGold = 0
     sessionJunk = 0
-    PocketMoneyDB.checksum = Security.generateChecksum(0, 0)
+    PocketMoneyDB.checksum = PocketMoneySecurity.generateChecksum(0, 0)
     print("Pocket Money: All statistics cleared!")
+    return
+  elseif msg == "rankings" or msg == "rank" then
+    PocketMoneyRankings.ShowRankings()
+    return
+  elseif msg == "rankui" then
+    PocketMoneyRankings.ToggleUI()
+    return
+  elseif msg == "testrank" then
+    -- Add fake data
+    PocketMoneyDB.guildRankings = PocketMoneyDB.guildRankings or {}
+    PocketMoneyDB.guildRankings["Stabby"] = {
+        gold = 250000,  -- 25g
+        timestamp = GetServerTime()
+    }
+    PocketMoneyDB.guildRankings["Sneakster"] = {
+        gold = 100000,  -- 10g
+        timestamp = GetServerTime()
+    }
+    PocketMoneyDB.guildRankings["ShadowBlade"] = {
+        gold = 500000,  -- 50g
+        timestamp = GetServerTime()
+    }
+    PocketMoneyDB.guildRankings["PocketPicker"] = {
+        gold = 150000,  -- 15g
+        timestamp = GetServerTime()
+    }
+    print("Added test ranking data")
+    PocketMoneyRankings.ToggleUI()
+    return
+  elseif msg == "help" then
+    print("Pocket Money Commands:")
+    print("  /pm - Show current statistics")
+    print("  /pm rankings - Show guild rankings")
+    print("  /pm clear - Reset all statistics")
     return
   end
 
   print("----------------------------------------")
   print("|cFF9370DB[Lifetime]|r:")
-  print("  Raw Gold: " .. formatMoney(PocketMoneyDB.lifetimeGold))
-  print("  Junk Items: " .. formatMoney(PocketMoneyDB.lifetimeJunk))
+  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB.lifetimeGold))
+  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB.lifetimeJunk))
   print("|cFF00FF00[Session]|r:")
-  print("  Raw Gold: " .. formatMoney(sessionGold))
-  print("  Junk Items: " .. formatMoney(sessionJunk))
+  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
+  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
   print("----------------------------------------")
 end

@@ -1,0 +1,3 @@
+[submodule "Libs/LibSerialize"]
+	path = Libs/LibSerialize
+	url = https://github.com/rossnichols/LibSerialize.git
