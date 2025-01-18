@@ -163,5 +163,15 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 function PocketMoneyRankings.ToggleUI()
-  PocketMoneyRankings.ShowRankings()
+  if RankingsUI:IsShown() then
+    RankingsUI:Hide()
+  else
+    PocketMoneyRankings.SendUpdate()
+    PocketMoneyRankings.RequestLatestData()
+    PocketMoneyRankings.ShowRankings()
+    C_Timer.After(0.5, function()
+      RankingsUI:Show()
+      PocketMoneyRankings.ShowRankings()
+    end)
+  end
 end

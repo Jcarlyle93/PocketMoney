@@ -10,15 +10,19 @@ end
 -- Get realm and player info
 local realmName = GetRealmName()
 local playerName = UnitName("player")
+local _, playerClass = UnitClass("player")
+local isRogue = playerClass == "ROGUE"
 
 -- Initialize DB structure
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
-  lifetimeGold = 0,
-  lifetimeJunk = 0,
-  checksum = nil
-}
+if isRogue then
+  PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
+    lifetimeGold = 0,
+    lifetimeJunk = 0,
+    checksum = nil
+  }
+end
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 
 -- Session variables
@@ -127,6 +131,10 @@ end
 
 SLASH_POCKETMONEY1 = "/pm"
 SlashCmdList["POCKETMONEY"] = function(msg)
+  if not isRogue then
+    print("You're not a rogue!")
+    return
+  end
   if msg == "clear" then
     PocketMoneyDB[realmName][playerName].lifetimeGold = 0
     PocketMoneyDB[realmName][playerName].lifetimeJunk = 0
@@ -136,34 +144,6 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("Pocket Money: All statistics cleared!")
     return
   elseif msg == "rankings" or msg == "rank" then
-    PocketMoneyRankings.ToggleUI()
-    return
-  elseif msg == "testrank" then
-    -- Add test data using realm structure
-    PocketMoneyDB[realmName].guildRankings["Stabby"] = {
-      gold = 250000,  -- 25g
-      timestamp = GetServerTime()
-    }
-    PocketMoneyDB[realmName].guildRankings["Sneakster"] = {
-      gold = 100000,  -- 10g
-      timestamp = GetServerTime()
-    }
-    PocketMoneyDB[realmName].guildRankings["ShadowBlade"] = {
-      gold = 500000,  -- 50g
-      timestamp = GetServerTime()
-    }
-    PocketMoneyDB[realmName].guildRankings["PocketPicker"] = {
-      gold = 150000,  -- 15g
-      timestamp = GetServerTime()
-    }
-    print("Added test ranking data")
-    PocketMoneyRankings.ToggleUI()
-    return
-  elseif msg == "cleartestdata" then
-    local playerData = PocketMoneyDB[realmName].guildRankings[playerName]
-    PocketMoneyDB[realmName].guildRankings = {}
-    PocketMoneyDB[realmName].guildRankings[playerName] = playerData
-    print("Test ranking data cleared")
     PocketMoneyRankings.ToggleUI()
     return
   elseif msg == "help" then
