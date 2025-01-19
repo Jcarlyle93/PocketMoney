@@ -18,7 +18,9 @@ function PocketMoneyRankings.SendUpdate()
     type = "PLAYER_UPDATE",
     player = playerName,
     realm = realmName,
-    gold = PocketMoneyDB[realmName][playerNameWithoutRealm].lifetimeGold,
+    gold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0,
+    junk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0,
+    boxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue or 0,
     timestamp = GetServerTime()
   }
 
@@ -109,6 +111,8 @@ function PocketMoneyRankings.ProcessUpdate(sender, data)
   if not existingData or existingData.timestamp < messageData.timestamp then
     PocketMoneyDB[realmName].guildRankings[playerName] = {
       gold = messageData.gold,
+      junk = messageData.junk,
+      boxValue = messageData.boxValue,
       timestamp = messageData.timestamp
     }
   end
@@ -117,17 +121,41 @@ end
 function PocketMoneyRankings.ShowRankings()
   local rankings = {}
   local realmName = GetRealmName()
+  local playerName = UnitName("player")
 
   for player, data in pairs(PocketMoneyDB[realmName].guildRankings or {}) do
-    table.insert(rankings, {player = player, gold = data.gold})
+    if player == playerName then
+      local myData = PocketMoneyDB[realmName][playerName]
+      local total = (myData.lifetimeGold or 0) + (myData.lifetimeJunk or 0) + (myData.lifetimeBoxValue or 0)
+      table.insert(rankings, {
+        player = playerName,
+        total = total,
+        gold = myData.lifetimeGold or 0,
+        junk = myData.lifetimeJunk or 0,
+        boxValue = myData.lifetimeBoxValue or 0
+      })
+    else
+      local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
+      table.insert(rankings, {
+        player = player, 
+        total = total,
+        gold = data.gold or 0,
+        junk = data.junk or 0,
+        boxValue = data.boxValue or 0
+      })
+    end
+  end
+
+  for _, data in ipairs(rankings) do
+    print(data.player, "Total:", data.total)
   end
   
-  table.sort(rankings, function(a, b) return a.gold > b.gold end)
+  table.sort(rankings, function(a, b) return a.total > b.total end)
   
   for i, data in ipairs(rankings) do
     if i <= 10 then
       print(string.format("%d. %s - %s", i, data.player, 
-        PocketMoneyCore.FormatMoney(data.gold)))
+        PocketMoneyCore.FormatMoney(data.total)))
     end
   end
 end
