@@ -36,7 +36,7 @@ if isRogue then
 end
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 
-local CURRENT_DB_VERSION = 1
+local CURRENT_DB_VERSION = 1.1
 
 local function UpgradeDatabase()
   if not PocketMoneyDB[realmName][playerName].dbVersion or PocketMoneyDB[realmName][playerName].dbVersion < CURRENT_DB_VERSION then

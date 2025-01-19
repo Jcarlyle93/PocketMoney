@@ -1,3 +1,5 @@
+local rankings = {}
+local processedPlayers = {}
 local BACKDROP = {
   bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
   edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -56,6 +58,7 @@ end
 
 PocketMoneyRankings.UpdateUI = function()
   local realmName = GetRealmName()
+  local playerName = UnitName("player")
   
   if not PocketMoneyDB or not PocketMoneyDB[realmName] or not PocketMoneyDB[realmName].guildRankings then return end
 
@@ -63,12 +66,38 @@ PocketMoneyRankings.UpdateUI = function()
     child:Hide()
     child:SetParent(nil)
   end
-  
+
   local rankings = {}
-  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
-    table.insert(rankings, {player = player, gold = data.gold})
+  local processedPlayers = {}
+
+  if PocketMoneyDB[realmName][playerName] then
+    local myData = PocketMoneyDB[realmName][playerName]
+    local total = (myData.lifetimeGold or 0) + (myData.lifetimeJunk or 0) + (myData.lifetimeBoxValue or 0)
+    table.insert(rankings, {
+      player = playerName,
+      total = total,
+      gold = myData.lifetimeGold or 0,
+      junk = myData.lifetimeJunk or 0,
+      boxValue = myData.lifetimeBoxValue or 0
+    })
+    processedPlayers[playerName] = true
   end
-  table.sort(rankings, function(a, b) return a.gold > b.gold end)
+
+  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
+    if not processedPlayers[player] then
+      local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
+      table.insert(rankings, {
+        player = player,
+        total = total,
+        gold = data.gold or 0,
+        junk = data.junk or 0,
+        boxValue = data.boxValue or 0
+      })
+      processedPlayers[player] = true
+    end
+  end
+
+  table.sort(rankings, function(a, b) return a.total > b.total end)
   
   for i, data in ipairs(rankings) do
     local entryFrame = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
@@ -103,6 +132,24 @@ PocketMoneyRankings.UpdateUI = function()
         border:SetColorTexture(0.8, 0.5, 0.2, 0.3) 
       end
     end
+
+    entryFrame:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:AddLine(data.player .. "'s Breakdown:", 1, 0.84, 0)
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddLine("Raw Gold: " .. PocketMoneyCore.FormatMoney(data.gold))
+      GameTooltip:AddLine("Junk Items: " .. PocketMoneyCore.FormatMoney(data.junk))
+      GameTooltip:AddLine("Junkbox Value: " .. PocketMoneyCore.FormatMoney(data.boxValue))
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddLine("Total: " .. PocketMoneyCore.FormatMoney(data.total), 0, 1, 0)
+      GameTooltip:Show()
+    end)
+
+    entryFrame:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+    end)
+
+    entryFrame:EnableMouse(true)
     
     local rankText = entryFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     rankText:SetPoint("LEFT", 5, 0)
@@ -114,10 +161,10 @@ PocketMoneyRankings.UpdateUI = function()
     
     local goldText = entryFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     goldText:SetPoint("RIGHT", -5, 0)
-    goldText:SetText(PocketMoneyCore.FormatMoney(data.gold))
+    goldText:SetText(PocketMoneyCore.FormatMoney(data.total))
   end
 
-  RankingsUI:RegisterEvent("PLAYER_REGEN_DISABLED")  -- Fires when entering combat
+  RankingsUI:RegisterEvent("PLAYER_REGEN_DISABLED")
   RankingsUI:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_DISABLED" then
       RankingsUI:Hide()
