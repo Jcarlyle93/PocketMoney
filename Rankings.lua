@@ -8,7 +8,7 @@ local function RegisterAddonPrefix()
 end
 
 -- Send
-function PocketMoneyRankings.SendUpdate()
+function PocketMoneyRankings.SendUpdate(channel, target)
   local currentTime = GetTime()
   local realmName = GetRealmName()
   local playerName = UnitName("player")
@@ -40,26 +40,33 @@ end
 -- Request
 function PocketMoneyRankings.RequestLatestData()
   local messageData = {
-    type = "DATA_REQUEST",
-    player = UnitName("player"),
-    realm = GetRealmName(),
-    timestamp = GetServerTime()
+      type = "DATA_REQUEST",
+      player = UnitName("player"),
+      realm = GetRealmName(),
+      timestamp = GetServerTime()
   }
 
   local LibSerialize = LibStub("LibSerialize")
   local success, serialized = pcall(function() 
-    return LibSerialize:Serialize(messageData) 
+      return LibSerialize:Serialize(messageData) 
   end)
 
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
-  else
-    print("PCM Debug: Failed to serialize data request")
+    
+    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
+      local realmName = GetRealmName()
+      
+      for name, _ in pairs(PocketMoneyDB[realmName].knownRogues) do
+        local fullName = name .. "-" .. realmName
+        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", fullName)
+      end
+    end
   end
 end
 
 -- Recieve
-function PocketMoneyRankings.ProcessUpdate(sender, data)
+function PocketMoneyRankings.ProcessUpdate(sender, data, channel)
   if sender:match("^" .. UnitName("player") .. "-") then
     return
   end
@@ -78,17 +85,17 @@ function PocketMoneyRankings.ProcessUpdate(sender, data)
     return
   end
 
-  if messageData.type == "ADDON_CHECK" then
+  local name = sender:match("^([^-]+)")
+
+  if messageData.type == "ADDON_CHECK" or messageData.type == "DATA_REQUEST" then
     PocketMoneyRankings.SendUpdate("WHISPER", sender)
-    return
-  elseif messageData.type == "DATA_REQUEST" then
-    PocketMoneyRankings.SendUpdate()
     return
   end
 
   if messageData.type ~= "PLAYER_UPDATE" then
     return
   end
+
 
   local realmName = messageData.realm
   local playerName = messageData.player
@@ -173,6 +180,30 @@ function PocketMoneyRankings.ShowRankings()
   end
 end
 
+function PocketMoneyRankings.AuditGuildRankings()
+  local realmName = GetRealmName()
+  print("PCM Debug: Starting guild rankings audit...")
+  local guildRogues = {}
+  local numMembers = GetNumGuildMembers()
+  for i = 1, numMembers do
+    local name, _, _, _, _, _, _, _, _, _, class = GetGuildRosterInfo(i)
+    local guildMemberName = name:match("^([^-]+)")
+    if class == "ROGUE" then
+      guildRogues[guildMemberName] = true
+    end
+  end
+
+  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
+    if not guildRogues[player] then
+      print("PCM Debug: Moving", player, "to known rogues (not in guild)")
+      PocketMoneyDB[realmName].knownRogues[player] = data
+      PocketMoneyDB[realmName].guildRankings[player] = nil
+    end
+  end
+
+  print("PCM Debug: Audit complete")
+end
+
 local hasRequestedInitialData = false
 local rankingsFrame = CreateFrame("Frame")
 rankingsFrame:RegisterEvent("CHAT_MSG_ADDON")
@@ -189,8 +220,17 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     end
   elseif event == "CHAT_MSG_ADDON" then
     local prefix, message, channel, sender = ...
-    if prefix == ADDON_PREFIX and (channel == "GUILD" or channel == "WHISPER") then
-      PocketMoneyRankings.ProcessUpdate(sender, message)
+    if not sender then
+      return
+    end
+    
+    local name = sender:match("^([^-]+)")
+
+    local realmName = GetRealmName()
+    if prefix == ADDON_PREFIX then
+      if channel == "GUILD" or channel == "WHISPER" then
+        PocketMoneyRankings.ProcessUpdate(sender, message, channel)
+      end
     end
   elseif event == "PLAYER_LOGOUT" then
     PocketMoneyRankings.SendUpdate()
@@ -208,7 +248,6 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     local _, class = UnitClass(unit)
     
     if class == "ROGUE" and name ~= playerName then
-      -- Send a ping message to check if they have the addon
       local messageData = {
         type = "ADDON_CHECK",
         player = UnitName("player"),
@@ -231,12 +270,6 @@ function PocketMoneyRankings.ToggleUI()
   if RankingsUI:IsShown() then
     RankingsUI:Hide()
   else
-    PocketMoneyRankings.SendUpdate()
-    PocketMoneyRankings.RequestLatestData()
-    PocketMoneyRankings.ShowRankings()
-    C_Timer.After(0.5, function()
-      RankingsUI:Show()
-      PocketMoneyRankings.ShowRankings()
-    end)
+    RankingsUI:Show()
   end
 end

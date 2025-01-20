@@ -53,6 +53,7 @@ serverCheckbox:SetScript("OnClick", function(self)
   local checked = self:GetChecked()
   PocketMoneyDB.settings = PocketMoneyDB.settings or {}
   PocketMoneyDB.settings.includeNearbyRogues = checked
+  PocketMoneyRankings.RequestLatestData()
   PocketMoneyRankings.UpdateUI()
 end)
 
@@ -64,16 +65,18 @@ tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
 
 PocketMoneyRankings.ToggleUI = function()
     if RankingsUI:IsShown() then
-        RankingsUI:Hide()
+      RankingsUI:Hide()
     else
-        RankingsUI:Show()
-        PocketMoneyRankings.UpdateUI()
+      RankingsUI:Show()
+      PocketMoneyRankings.UpdateUI()
     end
 end
 
 PocketMoneyRankings.UpdateUI = function()
   local realmName = GetRealmName()
   local playerName = UnitName("player")
+
+  PocketMoneyRankings.RequestLatestData()
   
   if not PocketMoneyDB or not PocketMoneyDB[realmName] or not PocketMoneyDB[realmName].guildRankings then return end
 
@@ -127,8 +130,6 @@ PocketMoneyRankings.UpdateUI = function()
         processedPlayers[player] = true
       end
     end
-  else
-    titleText:SetText("Guild Pickpocket Rankings")
   end
 
   serverCheckbox:SetChecked(PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues or false)
