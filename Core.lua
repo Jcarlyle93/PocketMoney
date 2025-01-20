@@ -290,6 +290,9 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("  /pm rankings - Show guild rankings")
     print("  /pm clear - Reset all statistics")
     return
+  elseif msg == "audit" then
+    PocketMoneyRankings.AuditGuildRankings()
+    return
   end
   if not isRogue then
     print("You're not a rogue!")
@@ -305,4 +308,5 @@ SlashCmdList["POCKETMONEY"] = function(msg)
   print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
   print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(sessionBoxValue))
   print("----------------------------------------")
+  print("Use '/pm rank' to see how you compare!")
 end
