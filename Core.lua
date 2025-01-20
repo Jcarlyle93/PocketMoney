@@ -35,21 +35,24 @@ if isRogue then
   }
 end
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
+PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
-local CURRENT_DB_VERSION = 1.1
+local CURRENT_DB_VERSION = 1.2
 
 local function UpgradeDatabase()
   if not PocketMoneyDB[realmName][playerName].dbVersion or PocketMoneyDB[realmName][playerName].dbVersion < CURRENT_DB_VERSION then
     local existingGold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0
     local existingJunk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0
+    local existingBoxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue or 0
 
     PocketMoneyDB[realmName][playerName] = {
       lifetimeGold = existingGold,
       lifetimeJunk = existingJunk,
-      lifetimeBoxValue = 0,
+      lifetimeBoxValue = existingBoxValue,
       dbVersion = CURRENT_DB_VERSION,
       checksum = nil
     }
+    PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
   end
 end
 
@@ -269,10 +272,6 @@ end)
 
 SLASH_POCKETMONEY1 = "/pm"
 SlashCmdList["POCKETMONEY"] = function(msg)
-  if not isRogue then
-    print("You're not a rogue!")
-    return
-  end
   if msg == "clear" then
     PocketMoneyDB[realmName][playerName].lifetimeGold = 0
     PocketMoneyDB[realmName][playerName].lifetimeJunk = 0
@@ -292,7 +291,10 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("  /pm clear - Reset all statistics")
     return
   end
-
+  if not isRogue then
+    print("You're not a rogue!")
+    return
+  end
   print("----------------------------------------")
   print("|cFF9370DB[Lifetime]|r:")
   print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeGold))

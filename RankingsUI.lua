@@ -41,8 +41,23 @@ titleText:SetText("Guild Pickpocket Rankings")
 local closeButton = CreateFrame("Button", nil, RankingsUI, "UIPanelCloseButton")
 closeButton:SetPoint("TOPRIGHT")
 
+local serverCheckbox = CreateFrame("CheckButton", nil, RankingsUI, "UICheckButtonTemplate")
+serverCheckbox:SetPoint("TOPLEFT", 20, -25)
+serverCheckbox:SetSize(24, 24)
+
+local serverLabel = RankingsUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+serverLabel:SetPoint("LEFT", serverCheckbox, "RIGHT", 5, 0)
+serverLabel:SetText("Include Nearby Rogues")
+
+serverCheckbox:SetScript("OnClick", function(self)
+  local checked = self:GetChecked()
+  PocketMoneyDB.settings = PocketMoneyDB.settings or {}
+  PocketMoneyDB.settings.includeNearbyRogues = checked
+  PocketMoneyRankings.UpdateUI()
+end)
+
 local contentFrame = CreateFrame("Frame", nil, RankingsUI)
-contentFrame:SetPoint("TOPLEFT", 20, -30)
+contentFrame:SetPoint("TOPLEFT", 20, -50)
 contentFrame:SetPoint("BOTTOMRIGHT", -20, 10)
 
 tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
@@ -96,7 +111,27 @@ PocketMoneyRankings.UpdateUI = function()
       processedPlayers[player] = true
     end
   end
+  if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
+    titleText:SetText("Server Pickpocket Rankings")
+    for player, data in pairs(PocketMoneyDB[realmName].knownRogues) do
+      if not processedPlayers[player] then
+        local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
+        table.insert(rankings, {
+          player = player,
+          total = total,
+          gold = data.gold or 0,
+          junk = data.junk or 0,
+          boxValue = data.boxValue or 0,
+          lastSeen = data.lastSeen
+        })
+        processedPlayers[player] = true
+      end
+    end
+  else
+    titleText:SetText("Guild Pickpocket Rankings")
+  end
 
+  serverCheckbox:SetChecked(PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues or false)
   table.sort(rankings, function(a, b) return a.total > b.total end)
   
   for i, data in ipairs(rankings) do

@@ -6,8 +6,6 @@
 ## Version: 1.2
 ## X-Credits: LibSerialize by Ross Nichols
 
-## Made for Wibber, you're welcome.
-
 # Libraries
 Libs\LibSerialize\LibSerialize.lua
 
