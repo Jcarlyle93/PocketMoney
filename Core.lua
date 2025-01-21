@@ -105,26 +105,33 @@ local function parseMoneyString(moneyStr)
 end
 
 local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
+  print("PCM Debug: Processing junkbox loot")
+  print("PCM Debug: - Type:", lootSlotType)
+  print("PCM Debug: - Item:", itemLink)
+  print("PCM Debug: - Quantity:", quantity)
+  print("PCM Debug: - Current junkbox:", currentJunkboxType)
+
   if lootSlotType == 1 then  -- Item loot
     if itemLink and not lastProcessedItems[itemLink] then
       local itemID = GetItemInfoInstant(itemLink)
       local itemName = GetItemInfo(itemLink)
       local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
       
+      print("PCM Debug: - Item details:")
+      print("PCM Debug:   - ID:", itemID)
+      print("PCM Debug:   - Name:", itemName)
+      print("PCM Debug:   - Sell price:", itemSellPrice)
+      
       if itemSellPrice then
         local totalValue = itemSellPrice * (quantity or 1)
+        print("PCM Debug: ✓ Adding value to junkbox total:", totalValue)
         updateBoxValue(totalValue, "Junkbox Item")
         lastProcessedItems[itemLink] = true
+      else
+        print("PCM Debug: ✗ Item has no sell value")
       end
-    end
-  elseif lootSlotType == 2 then  -- Money loot
-    if item and item ~= lastProcessedMoney then
-      local copper = parseMoneyString(item)
-      
-      if copper > 0 then
-        updateBoxValue(copper, "Junkbox Money")
-        lastProcessedMoney = item
-      end
+    else
+      print("PCM Debug: ✗ Item already processed or no link")
     end
   end
 end
@@ -158,29 +165,6 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
         gold = PocketMoneyDB[realmName][playerName].lifetimeGold,
         timestamp = GetServerTime()
       }
-    end
-  end
-end
-
-local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
-  if lootSlotType == 1 then  -- Item loot
-    if itemLink and not lastProcessedItems[itemLink] then
-      local itemID = GetItemInfoInstant(itemLink)
-      local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
-      
-      if itemSellPrice then
-        local totalValue = itemSellPrice * (quantity or 1)
-        updateBoxValue(totalValue, "Junkbox Item")
-        lastProcessedItems[itemLink] = true
-      end
-    end
-  elseif lootSlotType == 2 then  -- Money loot
-    if item and item ~= lastProcessedMoney then
-      local copper = parseMoneyString(item)
-      if copper > 0 then
-        updateBoxValue(copper, "Junkbox Money")
-        lastProcessedMoney = item
-      end
     end
   end
 end
