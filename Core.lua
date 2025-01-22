@@ -37,6 +37,13 @@ end
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
+PocketMoneyDB[realmName][playerName].achievements = PocketMoneyDB[realmName][playerName].achievements or {
+  progress = {},
+  completed = {},
+  bosses = {},
+  checksum = nil
+}
+
 local CURRENT_DB_VERSION = 1.2
 
 local function UpgradeDatabase()
@@ -292,6 +299,16 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     return
   elseif msg == "audit" then
     PocketMoneyRankings.AuditGuildRankings()
+    return
+  elseif msg == "achievements" or msg == "ach" then
+    PocketMoneyAchievements.ToggleUI()
+    return
+  elseif msg == "testbanner" then
+    PocketMoneyAchievements.ShowBanner({
+      name = "Test Achievement Unlocked!",
+      points = 10,
+      iconID = 921  
+    })
     return
   end
   if not isRogue then
