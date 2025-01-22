@@ -1,12 +1,13 @@
-local ADDON_VERSION = "1.5.0"
+local ADDON_VERSION = "1.5.1"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.5.0"] = [[
-Pocket Money Updated to Version 1.5.0:
+  ["1.5.1"] = [[
+Pocket Money Updated to Version 1.5.X:
 
 - Minor bug fixes
+- Catches whisper err reponses
 - This new "What's Changed" window
 
 Recommended Actions:

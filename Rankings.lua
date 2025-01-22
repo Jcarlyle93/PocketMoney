@@ -7,6 +7,21 @@ local function RegisterAddonPrefix()
   end
 end
 
+local function SuppressOfflineWhisperError()
+  local originalErrorHandler = UIErrorsFrame:GetScript("OnEvent")
+  
+  UIErrorsFrame:SetScript("OnEvent", function(self, event, errorType, message, ...)
+      -- Check if this is the specific offline whisper error
+      if event == "UI_ERROR_MESSAGE" and 
+         message:find("is not currently playing") then
+          return  -- Silently ignore this specific error
+      end
+      
+      -- Call the original error handler for all other errors
+      return originalErrorHandler(self, event, errorType, message, ...)
+  end)
+end
+
 -- Send
 function PocketMoneyRankings.SendUpdate(channel, target)
   local currentTime = GetTime()
@@ -56,7 +71,7 @@ function PocketMoneyRankings.RequestLatestData()
     
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
       local realmName = GetRealmName()
-      
+
       for name, _ in pairs(PocketMoneyDB[realmName].knownRogues) do
         local fullName = name .. "-" .. realmName
         C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", fullName)
@@ -217,6 +232,7 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     local addonName = ...
     if addonName == "PocketMoney" then
       RegisterAddonPrefix()
+      SuppressOfflineWhisperError()
     end
   elseif event == "CHAT_MSG_ADDON" then
     local prefix, message, channel, sender = ...
