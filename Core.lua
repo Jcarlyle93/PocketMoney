@@ -163,6 +163,9 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
 end
 
 local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
+  if not isOpeningJunkbox or not currentJunkboxType then
+    return
+  end
   if lootSlotType == 1 then  -- Item loot
     if itemLink and not lastProcessedItems[itemLink] then
       local itemID = GetItemInfoInstant(itemLink)
