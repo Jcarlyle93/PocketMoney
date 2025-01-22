@@ -47,7 +47,7 @@ serverCheckbox:SetSize(24, 24)
 
 local serverLabel = RankingsUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 serverLabel:SetPoint("LEFT", serverCheckbox, "RIGHT", 5, 0)
-serverLabel:SetText("Include Nearby Rogues")
+serverLabel:SetText("Include Non-Guild Rogues")
 
 serverCheckbox:SetScript("OnClick", function(self)
   local checked = self:GetChecked()
