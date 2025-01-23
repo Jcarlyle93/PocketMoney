@@ -170,6 +170,9 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
 end
 
 local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
+  if not isOpeningJunkbox or not currentJunkboxType then
+    return
+  end
   if lootSlotType == 1 then  -- Item loot
     if itemLink and not lastProcessedItems[itemLink] then
       local itemID = GetItemInfoInstant(itemLink)
@@ -196,7 +199,9 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
     if addonName == "PocketMoney" then
+      print("PickPocket loaded")
       UpgradeDatabase()
+      PocketMoneyWhatsNew.CheckUpdateNotification()
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     local unit, castGUID, spellID = ...
