@@ -1,17 +1,19 @@
-local ADDON_VERSION = "1.5.1"
+local ADDON_VERSION = "1.5.2"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.5.1"] = [[
+  ["1.5.2"] = [[
 Pocket Money Updated to Version 1.5.X:
 
 - Minor bug fixes
-- Catches whisper err reponses
 - This new "What's Changed" window
+- No longer caused "No player <player> is currently playing" err
 
 Recommended Actions:
 - Run /pm Audit
+
+Coming soon - Rogue Pickpocket Achievements!
 
 Enjoy the update!
 Pocket Money, for rogues, by rogues.
