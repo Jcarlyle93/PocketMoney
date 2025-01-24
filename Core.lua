@@ -23,9 +23,10 @@ local _, playerClass = UnitClass("player")
 local isRogue = playerClass == "ROGUE"
 local pendingLootSlots = {}
 local CHANNEL_NAME = "PCMSync"
+local CHANNEL_NUMBER = "7"
 local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 
-JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
+JoinChannelByName(CHANNEL_NUMBER, CHANNEL_NAME)
 
 PocketMoneyCore = {}
 PocketMoneyDB = PocketMoneyDB or {}
