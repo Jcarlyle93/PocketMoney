@@ -56,11 +56,14 @@ function PocketMoneyRankings.RequestLatestData()
     
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
       local realmName = GetRealmName()
-
       for name, _ in pairs(PocketMoneyDB[realmName].knownRogues) do
         local fullName = name .. "-" .. realmName
         if UnitExists(fullName) and UnitIsConnected(fullName) then
-          SafeSendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", fullName)
+          local playerFaction = UnitFactionGroup("player")
+          local targetFaction = UnitFactionGroup(fullName)
+          if playerFaction == targetFaction then
+            SafeSendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", fullName)
+          end
         end
       end
     end
