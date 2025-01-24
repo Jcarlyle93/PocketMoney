@@ -1,7 +1,7 @@
 local ADDON_PREFIX = "PMRank"
+PocketMoneyRankings = PocketMoneyRankings or {}
 local CHANNEL_NAME = "PCMSync"
 local CHANNEL_PASSWORD = "pm" .. GetRealmName()
-PocketMoneyRankings = PocketMoneyRankings or {}
 
 local function RegisterAddonPrefix()
   if not C_ChatInfo.IsAddonMessagePrefixRegistered(ADDON_PREFIX) then
@@ -11,6 +11,8 @@ end
 
 -- Send
 function PocketMoneyRankings.SendUpdate()
+  local realmName = GetRealmName()
+  local playerName = UnitName("player")
   local messageData = {
     type = "PLAYER_UPDATE",
     player = UnitName("player"),
