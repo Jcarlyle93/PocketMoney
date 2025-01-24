@@ -1,12 +1,12 @@
-local ADDON_VERSION = "1.5.3"
+local ADDON_VERSION = "1.5.4"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.5.3"] = [[
-Pocket Money Updated to Version 1.5.3:
+  ["1.5.4"] = [[
+Pocket Money Updated to Version 1.5.4:
 
-- No-longer tries to whisper opposite faction for data.
+- Fixed initialisation issues for rogues with broken DBs
 
 Coming soon - Rogue Pickpocket Achievements!
 
@@ -43,12 +43,8 @@ local function CompareVersions(currentVersion, lastSeenVersion)
   if current.minor > lastSeen.minor then 
     return true 
   end
-  if current.minor < lastSeen.minor then 
-    return false 
-  end
   
-  local result = current.patch > lastSeen.patch
-  return result
+  return false
 end
 
 function PocketMoneyWhatsNew.CheckUpdateNotification()
