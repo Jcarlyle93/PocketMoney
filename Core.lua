@@ -5,6 +5,8 @@ PocketMoney:RegisterEvent("LOOT_READY")
 PocketMoney:RegisterEvent("LOOT_OPENED")
 PocketMoney:RegisterEvent("LOOT_SLOT_CLEARED")
 PocketMoney:RegisterEvent("LOOT_CLOSED")
+PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
+PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 
 local PICKPOCKET_LOCKBOXES = {
   [16885] = "Heavy Junkbox",
@@ -23,10 +25,25 @@ local _, playerClass = UnitClass("player")
 local isRogue = playerClass == "ROGUE"
 local pendingLootSlots = {}
 local CHANNEL_NAME = "PCMSync"
-local CHANNEL_NUMBER = "7"
 local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 
-JoinChannelByName(CHANNEL_NUMBER, CHANNEL_NAME)
+LeaveChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
+JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
+
+local function OnChatChannelJoin()
+  print("PCM Debug: OnChatChannelJoin triggered")
+  local channels = { GetChannelList() }
+  print("PCM Debug: Retrieved channel list, length = " .. #channels)
+
+  for i = 1, #channels, 3 do
+      print("PCM Debug: Channel index " .. i .. " -> ID: " .. channels[i] .. ", Name: " .. channels[i + 1])
+      if channels[i + 1] == CHANNEL_NAME then
+          print("Joined hidden channel: " .. CHANNEL_NAME)
+          return
+      end
+  end
+  print("Failed to join hidden channel: " .. CHANNEL_NAME)
+end
 
 PocketMoneyCore = {}
 PocketMoneyDB = PocketMoneyDB or {}
@@ -261,7 +278,6 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     isPickpocketLoot = false
     lastProcessedMoney = nil
     wipe(lastProcessedItems)
-    
   end
 end)
 

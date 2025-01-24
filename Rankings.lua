@@ -1,7 +1,6 @@
 local ADDON_PREFIX = "PMRank"
 PocketMoneyRankings = PocketMoneyRankings or {}
 local CHANNEL_NAME = "PCMSync"
-local CHANNEL_NUMBER = "7"
 local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 
 local function RegisterAddonPrefix()
@@ -12,6 +11,7 @@ end
 
 -- Send
 function PocketMoneyRankings.SendUpdate()
+  SendChatMessage("PCM Debug Test Message", "CHANNEL", nil, GetChannelName(CHANNEL_NAME))
   local realmName = GetRealmName()
   local playerName = UnitName("player")
   local messageData = {
@@ -32,7 +32,7 @@ function PocketMoneyRankings.SendUpdate()
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL+_NUMBER, CHANNEL_NAME))
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
 end
@@ -54,7 +54,7 @@ function PocketMoneyRankings.RequestLatestData()
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NUMBER, CHANNEL_NAME))
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
  end
