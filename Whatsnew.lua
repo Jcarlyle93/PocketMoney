@@ -1,12 +1,13 @@
-local ADDON_VERSION = "1.5.4"
+local ADDON_VERSION = "1.6.0"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.5.4"] = [[
-Pocket Money Updated to Version 1.5.4:
+  ["1.6.0"] = [[
+Pocket Money Updated to Version 1.6.x:
 
-- Fixed initialisation issues for rogues with broken DBs
+- No longer reguires you to see other rogues in game for them to be added to your list!
+  This should allow the non-guild rogues toggle to populate with more usuers.
 
 Coming soon - Rogue Pickpocket Achievements!
 
