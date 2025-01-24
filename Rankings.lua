@@ -34,7 +34,7 @@ function PocketMoneyRankings.SendUpdate()
       C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
- end
+end
 
 -- Request
 function PocketMoneyRankings.RequestLatestData()
