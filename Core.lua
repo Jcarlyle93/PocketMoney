@@ -22,6 +22,10 @@ local playerName = UnitName("player")
 local _, playerClass = UnitClass("player")
 local isRogue = playerClass == "ROGUE"
 local pendingLootSlots = {}
+local CHANNEL_NAME = "PCMSync"
+local CHANNEL_PASSWORD = "pm" .. GetRealmName()
+
+JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
 
 PocketMoneyCore = {}
 PocketMoneyDB = PocketMoneyDB or {}
@@ -112,31 +116,6 @@ local function parseMoneyString(moneyStr)
   if copperMatch then copper = copper + tonumber(copperMatch) end
   
   return copper
-end
-
-local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
-  if lootSlotType == 1 then  -- Item loot
-    if itemLink and not lastProcessedItems[itemLink] then
-      local itemID = GetItemInfoInstant(itemLink)
-      local itemName = GetItemInfo(itemLink)
-      local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
-      
-      if itemSellPrice then
-        local totalValue = itemSellPrice * (quantity or 1)
-        updateBoxValue(totalValue, "Junkbox Item")
-        lastProcessedItems[itemLink] = true
-      end
-    end
-  elseif lootSlotType == 2 then  -- Money loot
-    if item and item ~= lastProcessedMoney then
-      local copper = parseMoneyString(item)
-      
-      if copper > 0 then
-        updateBoxValue(copper, "Junkbox Money")
-        lastProcessedMoney = item
-      end
-    end
-  end
 end
 
 local function updateBoxValue(value, debug_source)
