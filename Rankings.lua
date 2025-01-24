@@ -11,6 +11,8 @@ end
 
 -- Send
 function PocketMoneyRankings.SendUpdate()
+  local realmName = GetRealmName()
+  local playerName = UnitName("player")
   local messageData = {
     type = "PLAYER_UPDATE",
     player = UnitName("player"),
