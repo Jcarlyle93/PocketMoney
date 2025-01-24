@@ -31,22 +31,31 @@ if isRogue then
     lifetimeGold = 0,
     lifetimeJunk = 0,
     lifetimeBoxValue = 0,
-    checksum = nil
+    checksum = nil,
+    class = playerClass,
+    achievements = {
+      progress = {},
+      completed = {},
+      bosses = {},
+      checksum = nil
+    }
   }
 end
+
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
-PocketMoneyDB[realmName][playerName].achievements = PocketMoneyDB[realmName][playerName].achievements or {
-  progress = {},
-  completed = {},
-  bosses = {},
-  checksum = nil
-}
-
-local CURRENT_DB_VERSION = 1.2
+local CURRENT_DB_VERSION = 1.4
 
 local function UpgradeDatabase()
+  PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
+    lifetimeGold = 0,
+    lifetimeJunk = 0,
+    lifetimeBoxValue = 0,
+    checksum = nil,
+    class = playerClass
+  }
+
   if not PocketMoneyDB[realmName][playerName].dbVersion or PocketMoneyDB[realmName][playerName].dbVersion < CURRENT_DB_VERSION then
     local existingGold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0
     local existingJunk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0
@@ -57,9 +66,9 @@ local function UpgradeDatabase()
       lifetimeJunk = existingJunk,
       lifetimeBoxValue = existingBoxValue,
       dbVersion = CURRENT_DB_VERSION,
-      checksum = nil
+      checksum = nil,
+      class = playerClass
     }
-    PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
   end
 end
 
@@ -199,7 +208,15 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
     if addonName == "PocketMoney" then
-      print("PickPocket loaded")
+      print("Debug: GetRealmName() =", GetRealmName())
+      print("Debug: UnitName('player') =", UnitName("player"))
+      print("Debug: UnitClass('player') =", UnitClass("player"))
+      
+      realmName = GetRealmName()
+      playerName = UnitName("player")
+      _, playerClass = UnitClass("player")
+      isRogue = playerClass == "ROGUE"
+
       UpgradeDatabase()
       PocketMoneyWhatsNew.CheckUpdateNotification()
     end
@@ -207,6 +224,14 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     local unit, castGUID, spellID = ...
     if unit == "player" and spellID == 921 then
       isPickpocketLoot = true
+      PocketMoneyAchievements.UpdateProgress("PICKPOCKET_COUNT")
+      local targetGUID = UnitGUID("target")
+      if targetGUID then
+        local npcID = tonumber(targetGUID:match("-(%d+)-%x+$"))
+        if npcID then
+          PocketMoneyAchievements.UpdateProgress("PICKPOCKET_BOSS", npcID)
+        end
+      end
       wipe(lastProcessedItems)
       C_Timer.After(1, function()
         isPickpocketLoot = false
@@ -258,6 +283,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
         if lootSlotType == 1 then
           local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
         end
+        PocketMoneyAchievements.UpdateProgress("JUNKBOX_OPEN")
       elseif isPickpocketLoot then
         ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
       end

@@ -1,3 +1,8 @@
+local LibDeflate = LibStub and LibStub("LibDeflate")
+if not LibDeflate then
+    print("PCM Debug: LibDeflate not found!")
+end
+
 if not PocketMoneyAchievements then
   PocketMoneyAchievements = {}
 end
@@ -5,6 +10,9 @@ end
 local function GetIconByID(iconID)
   return select(3, GetSpellInfo(iconID)) or "Interface\\Icons\\INV_Misc_QuestionMark"
 end
+
+local realmName = GetRealmName()
+local playerName = UnitName("player")
 
 -- Achievement UI window list
 local BACKDROP = {
@@ -27,6 +35,17 @@ AchievementsFrame:SetScript("OnDragStart", AchievementsFrame.StartMoving)
 AchievementsFrame:SetScript("OnDragStop", AchievementsFrame.StopMovingOrSizing)
 AchievementsFrame:SetBackdrop(BACKDROP)
 AchievementsFrame:Hide()
+AchievementsFrame:SetScript("OnMouseDown", function(self, button)
+  if button == "LeftButton" then
+      self:StartMoving()
+  end
+end)
+
+AchievementsFrame:SetScript("OnMouseUp", function(self, button)
+  if button == "LeftButton" then
+      self:StopMovingOrSizing()
+  end
+end)
 
 -- Title
 local titleBar = AchievementsFrame:CreateTexture(nil, "ARTWORK")
@@ -65,19 +84,55 @@ pointsText:SetFont(pointsText:GetFont(), 24)
 -- ScrollFrame for achievements
 local scrollFrame = CreateFrame("ScrollFrame", nil, AchievementsFrame, "UIPanelScrollFrameTemplate")
 scrollFrame:SetPoint("TOPLEFT", progressBarBorder, "BOTTOMLEFT", 0, -10)
-scrollFrame:SetPoint("BOTTOMRIGHT", -35, 20)  
+scrollFrame:SetPoint("BOTTOMRIGHT", -45, 20)  
 
-local scrollChild = CreateFrame("Frame")
+local scrollChild = CreateFrame("Frame", nil, scrollFrame)
 scrollFrame:SetScrollChild(scrollChild)
-scrollChild:SetSize(scrollFrame:GetWidth(), 1)
+scrollChild:SetWidth(scrollFrame:GetWidth())
+scrollChild:SetHeight(1)
 
 -- Close button
 local closeButton = CreateFrame("Button", nil, AchievementsFrame, "UIPanelCloseButton")
 closeButton:SetPoint("TOPRIGHT", -5, -5)  -- Added explicit offset
 
-local function CreateAchievementEntry(parent, achievement)
+function LoadAchievements()
+  if not PocketMoneyEncryptedAchievements then 
+      print("PCM Debug: No encrypted achievements found")
+      return {} 
+  end
+  
+  local decoded = LibDeflate:DecodeForWoWAddonChannel(PocketMoneyEncryptedAchievements)
+  if not decoded then
+      print("PCM Debug: Decoding failed")
+      return {}
+  end
+  
+  local decompressed = LibDeflate:DecompressDeflate(decoded)
+  if not decompressed then
+      print("PCM Debug: Decompression failed")
+      return {}
+  end
+  
+  local func, err = loadstring(decompressed)
+  if not func then
+      print("PCM Debug: Loadstring error: " .. tostring(err))
+      return {}
+  end
+  
+  local success, result = pcall(func)
+  if not success then
+      print("PCM Debug: PCall error: " .. tostring(result))
+      return {}
+  end
+  
+  return result
+end
+
+local function CreateAchievementEntry(achievement, isCompleted, parent, yOffset)
   local entry = CreateFrame("Frame", nil, parent, "BackdropTemplate")
   entry:SetSize(parent:GetWidth() - 20, 50)
+  entry:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -yOffset)
+
   entry:SetBackdrop({
     bgFile = "Interface\\Buttons\\WHITE8X8",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -88,97 +143,79 @@ local function CreateAchievementEntry(parent, achievement)
   })
   entry:SetBackdropColor(0.1, 0.1, 0.1, 0.3)
   entry:SetBackdropBorderColor(0.6, 0.6, 0.6)
-  
-  -- Icon
+
   local icon = entry:CreateTexture(nil, "ARTWORK")
   icon:SetSize(32, 32)
-  icon:SetPoint("LEFT", 10, 0)
-  icon:SetTexture(achievement.locked and "Interface\\Icons\\INV_Misc_Lock_01" or achievement.icon)
-  
-  -- Achievement text
-  local text = entry:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  text:SetPoint("LEFT", icon, "RIGHT", 10, 0)
-  text:SetText(achievement.name)
-  if achievement.locked then
-    text:SetTextColor(0.5, 0.5, 0.5)
+  icon:SetPoint("LEFT", 5, 0)
+
+  local nameText = entry:CreateFontString(nil, "OVERLAY", isCompleted and "GameFontNormal" or "GameFontDisable")
+  nameText:SetPoint("LEFT", icon, "RIGHT", 10, 0)
+  nameText:SetText(achievement.name)
+  nameText:SetWidth(parent:GetWidth() - 80) -- Limit name text width
+
+  local pointsText = entry:CreateFontString(nil, "OVERLAY", isCompleted and "GameFontHighlight" or "GameFontDisable")
+  pointsText:SetPoint("RIGHT", -10, 0)
+
+  if isCompleted then
+    icon:SetTexture(GetIconByID(achievement.icon))
+    pointsText:SetText(tostring(achievement.points))
+  else
+    icon:SetTexture("Interface\\Icons\\inv_misc_questionmark")
+    icon:SetVertexColor(0.5, 0.5, 0.5)
+    pointsText:SetText("?")
   end
-  
-  -- Points display for achievement
-  local pointsDisplay = entry:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  pointsDisplay:SetPoint("RIGHT", -10, 0)
-  pointsDisplay:SetText(achievement.points .. " |TInterface\\RAIDFRAME\\ReadyCheck-Ready:0|t")
-  local progressText = entry:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  if achievement.criteria.type == "PICKPOCKET_COUNT" then
-    local current = PocketMoneyDB[realmName][playerName].achievements.progress["pickpocket"] or 0
-    progressText:SetText(string.format("%d/%d", current, achievement.criteria.count))
-    elseif achievement.criteria.type == "PICKPOCKET_DUNGEON_COMPLETE" then
-      local completed = 0
-      for _, bossID in ipairs(achievement.criteria.requiredBosses) do
-        if PocketMoneyDB[realmName][playerName].achievements.bosses[bossID] then
-          completed = completed + 1
-        end
-      end
-      progressText:SetText(string.format("%d/%d bosses", completed, #achievement.criteria.requiredBosses))
-    end
-  return entry
+
+  entry:Show()
+  return 55
 end
 
--- Function to populate the achievement list
 local function PopulateAchievements()
+
+  for _, child in ipairs({scrollChild:GetChildren()}) do
+    child:Hide()
+  end
+
+  local achievements = LoadAchievements()
+  local playerAchievements = PocketMoneyDB[realmName][playerName].achievements.completed or {}
+  local entryPool = {}
   local yOffset = 0
-  
-  -- We'll use our actual achievements from the encrypted database
-  local achievements = PocketMoneyEncryptedAchievements  -- This comes from our generated file
-  
-  -- First add unlocked achievements
-  for id, achievement in pairs(achievements) do
-    local isCompleted = PocketMoneyDB[realmName][playerName].achievements.completed[id]
-    if isCompleted then
-      local entry = CreateAchievementEntry(scrollChild, achievement)
-      entry:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -yOffset)
-      yOffset = yOffset + 55
-    end
-  end
-  
-  -- Then add locked achievements
-  for id, achievement in pairs(achievements) do
-    local isCompleted = PocketMoneyDB[realmName][playerName].achievements.completed[id]
-    if not isCompleted then
-      local entry = CreateAchievementEntry(scrollChild, achievement)
-      entry:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -yOffset)
-      yOffset = yOffset + 55
-    end
-  end
-  
-  -- Update scroll child height
-  scrollChild:SetHeight(yOffset)
-  
-  -- Update progress bar and points
   local totalAchievements = 0
-  local unlockedCount = 0
-  local totalPoints = 0
-  
+  local completedAchievements = 0
+
   for id, achievement in pairs(achievements) do
-    totalAchievements = totalAchievements + 1
-    if PocketMoneyDB[realmName][playerName].achievements.completed[id] then
-      unlockedCount = unlockedCount + 1
-      totalPoints = totalPoints + achievement.points
+    if playerAchievements[id] then
+      yOffset = yOffset + CreateAchievementEntry(achievement, true, scrollChild, yOffset)
+      completedAchievements = completedAchievements + 1
+      totalAchievements = totalAchievements + 1
     end
   end
-  
-  -- Update the UI elements
+
+  for id, achievement in pairs(achievements) do
+    if not playerAchievements[id] then
+      yOffset = yOffset + CreateAchievementEntry(achievement, false, scrollChild, yOffset)
+      totalAchievements = totalAchievements + 1
+    end
+  end
+
   progressBar:SetMinMaxValues(0, totalAchievements)
-  progressBar:SetValue(unlockedCount)
-  
+  progressBar:SetValue(completedAchievements)
   local progressText = progressBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  progressText:SetPoint("CENTER")
-  progressText:SetText(string.format("%d/%d", unlockedCount, totalAchievements))
+  progressText:SetPoint("CENTER", progressBar, "CENTER")
+  progressText:SetText(completedAchievements .. " / " .. totalAchievements)
   
-  pointsText:SetText(string.format("%d", totalPoints))
-  titleText:SetText(UnitName("player").."'s Achievements")
+  scrollChild:SetHeight(yOffset)
+  scrollFrame:UpdateScrollChildRect()
 end
 
 PocketMoneyAchievements.ToggleUI = function()
+  if not PocketMoneyDB[realmName][playerName].achievements then
+    PocketMoneyDB[realmName][playerName].achievements = {
+      progress = {},
+      completed = {},
+      bosses = {},
+      checksum = nil
+    }
+  end
   if AchievementsFrame:IsShown() then
     AchievementsFrame:Hide()
   else
@@ -229,22 +266,17 @@ achievementIcon:SetPoint("LEFT", 15, 0)
 achievementIcon:SetTexCoord(0, 1, 0, 1)
 achievementIcon:Show()
 
+-- Points text
+local pointsText = bannerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+pointsText:SetPoint("RIGHT", -15, 0)
+pointsText:SetJustifyH("RIGHT")
+
 -- Achievement text
 local achievementText = bannerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 achievementText:SetPoint("LEFT", achievementIcon, "RIGHT", 10, 0)
 achievementText:SetPoint("RIGHT", pointsText, "LEFT", -10, 0)
 achievementText:SetJustifyH("LEFT")
 achievementText:SetJustifyV("MIDDLE")
-
--- Points text
-local pointsText = bannerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-pointsText:SetPoint("RIGHT", -15, 0)
-pointsText:SetJustifyH("RIGHT")
-
--- Achievement icon on left (will be set per achievement)
-local achievementIcon = bannerFrame:CreateTexture(nil, "ARTWORK")
-achievementIcon:SetSize(32, 32)
-achievementIcon:SetPoint("LEFT", 15, 0)
 
 -- Achievement text
 local achievementText = bannerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

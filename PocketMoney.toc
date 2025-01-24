@@ -3,13 +3,15 @@
 ## Notes: Tracks gold made from pickpocketing
 ## Author: Worlds best rogue Indelible@Discord
 ## SavedVariables: PocketMoneyDB
-## Version: 1.5.1
+## Version: 1.5.2
 ## X-Credits: LibSerialize by Ross Nichols
 
 # Libraries
 Libs\LibSerialize\LibSerialize.lua
+Libs/LibDeflate/LibDeflate.lua
 
 # Core files
+EncryptedAchievements.lua
 Core.lua
 Whatsnew.lua
 Security.lua
