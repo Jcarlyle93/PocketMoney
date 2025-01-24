@@ -52,7 +52,7 @@ serverLabel:SetText("Include Non-Guild Rogues")
 serverCheckbox:SetScript("OnClick", function(self)
   local checked = self:GetChecked()
   PocketMoneyDB.settings = PocketMoneyDB.settings or {}
-  PocketMoneyDB.settings.includeNearbyRogues = checked
+  PocketMoneyDB.settings.includeAllRogues = checked
   PocketMoneyRankings.RequestLatestData()
   PocketMoneyRankings.UpdateUI()
 end)
@@ -114,7 +114,7 @@ PocketMoneyRankings.UpdateUI = function()
       processedPlayers[player] = true
     end
   end
-  if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
+  if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
     titleText:SetText("Server Pickpocket Rankings")
     for player, data in pairs(PocketMoneyDB[realmName].knownRogues) do
       if not processedPlayers[player] then
@@ -132,7 +132,7 @@ PocketMoneyRankings.UpdateUI = function()
     end
   end
 
-  serverCheckbox:SetChecked(PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues or false)
+  serverCheckbox:SetChecked(PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues or false)
   table.sort(rankings, function(a, b) return a.total > b.total end)
   
   for i, data in ipairs(rankings) do

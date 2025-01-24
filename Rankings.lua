@@ -1,4 +1,6 @@
 local ADDON_PREFIX = "PMRank"
+local CHANNEL_NAME = "PCMSync"
+local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyRankings = PocketMoneyRankings or {}
 
 local function RegisterAddonPrefix()
@@ -8,67 +10,51 @@ local function RegisterAddonPrefix()
 end
 
 -- Send
-function PocketMoneyRankings.SendUpdate(channel, target)
-  local currentTime = GetTime()
-  local realmName = GetRealmName()
-  local playerName = UnitName("player")
-
+function PocketMoneyRankings.SendUpdate()
   local messageData = {
     type = "PLAYER_UPDATE",
-    player = playerName,
-    realm = realmName,
+    player = UnitName("player"),
+    realm = GetRealmName(),
     gold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0,
     junk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0,
     boxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue or 0,
     timestamp = GetServerTime()
   }
-
+ 
   local LibSerialize = LibStub("LibSerialize")
   local success, serialized = pcall(function() 
     return LibSerialize:Serialize(messageData) 
   end)
-
+ 
   if success then
-    if channel and target then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, channel, target)
-    else
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
+    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
+    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
-end
+ end
 
 -- Request
 function PocketMoneyRankings.RequestLatestData()
   local messageData = {
-      type = "DATA_REQUEST",
-      player = UnitName("player"),
-      realm = GetRealmName(),
-      timestamp = GetServerTime()
+    type = "DATA_REQUEST",
+    player = UnitName("player"),
+    realm = GetRealmName(),
+    timestamp = GetServerTime()
   }
-
+ 
   local LibSerialize = LibStub("LibSerialize")
   local success, serialized = pcall(function() 
-      return LibSerialize:Serialize(messageData) 
+    return LibSerialize:Serialize(messageData) 
   end)
-
+ 
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
-    
-    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeNearbyRogues then
-      local realmName = GetRealmName()
-      for name, _ in pairs(PocketMoneyDB[realmName].knownRogues) do
-        local fullName = name .. "-" .. realmName
-        if UnitExists(fullName) and UnitIsConnected(fullName) then
-          local playerFaction = UnitFactionGroup("player")
-          local targetFaction = UnitFactionGroup(fullName)
-          if playerFaction == targetFaction then
-            SafeSendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", fullName)
-          end
-        end
-      end
+    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
-end
+ end
 
 -- Recieve
 function PocketMoneyRankings.ProcessUpdate(sender, data, channel)
@@ -215,8 +201,6 @@ rankingsFrame:RegisterEvent("CHAT_MSG_ADDON")
 rankingsFrame:RegisterEvent("PLAYER_LOGOUT")
 rankingsFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 rankingsFrame:RegisterEvent("ADDON_LOADED")
-rankingsFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-rankingsFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
@@ -225,15 +209,9 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     end
   elseif event == "CHAT_MSG_ADDON" then
     local prefix, message, channel, sender = ...
-    if not sender then
-      return
-    end
-    
-    local name = sender:match("^([^-]+)")
-
-    local realmName = GetRealmName()
     if prefix == ADDON_PREFIX then
-      if channel == "GUILD" or channel == "WHISPER" then
+      if channel == "GUILD" or 
+         (channel == "CHANNEL" and PocketMoneyDB.settings.includeAllRogues) then
         PocketMoneyRankings.ProcessUpdate(sender, message, channel)
       end
     end
@@ -247,29 +225,8 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
         hasRequestedInitialData = true
       end)
     end
-  elseif event == "NAME_PLATE_UNIT_ADDED" then
-    local unit = ...
-    local name = UnitName(unit)
-    local _, class = UnitClass(unit)
-    
-    if class == "ROGUE" and name ~= playerName then
-      local messageData = {
-        type = "ADDON_CHECK",
-        player = UnitName("player"),
-        realm = GetRealmName()
-      }
-        
-      local LibSerialize = LibStub("LibSerialize")
-      local success, serialized = pcall(function() 
-        return LibSerialize:Serialize(messageData) 
-      end)
-        
-      if success then
-        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "WHISPER", name)
-      end
-    end
   end
-end)
+ end)
 
 function PocketMoneyRankings.ToggleUI()
   if RankingsUI:IsShown() then
