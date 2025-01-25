@@ -16,7 +16,7 @@ local PICKPOCKET_LOCKBOXES = {
 }
 
 local function debug(msg)
-  print("PCM Debug: " .. tostring(msg))
+  DEFAULT_CHAT_FRAME:AddMessage("PCM Debug: " .. tostring(msg), 1, 1, 0)
 end
 
 local realmName = GetRealmName()
@@ -26,23 +26,38 @@ local isRogue = playerClass == "ROGUE"
 local pendingLootSlots = {}
 local CHANNEL_NAME = "PCMSync"
 local CHANNEL_PASSWORD = "pm" .. GetRealmName()
+local MAX_JOIN_ATTEMPTS = 3
+local joinAttempts = 0
+local joinTimer = nil
 
-LeaveChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
-JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD)
-
-local function OnChatChannelJoin()
-  print("PCM Debug: OnChatChannelJoin triggered")
-  local channels = { GetChannelList() }
-  print("PCM Debug: Retrieved channel list, length = " .. #channels)
-
-  for i = 1, #channels, 3 do
-      print("PCM Debug: Channel index " .. i .. " -> ID: " .. channels[i] .. ", Name: " .. channels[i + 1])
-      if channels[i + 1] == CHANNEL_NAME then
-          print("Joined hidden channel: " .. CHANNEL_NAME)
-          return
-      end
+local function attemptChannelJoin()
+  if joinAttempts >= MAX_JOIN_ATTEMPTS then
+    debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
+    return
   end
-  print("Failed to join hidden channel: " .. CHANNEL_NAME)
+
+  joinAttempts = joinAttempts + 1
+  debug("Attempt " .. joinAttempts .. " to join " .. CHANNEL_NAME)
+  
+  LeaveChannelByName(CHANNEL_NAME)
+  JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true)
+  
+  joinTimer = C_Timer.NewTimer(5, function()
+    local channels = { GetChannelList() }
+    
+    local joined = false
+    for i = 1, #channels, 3 do
+      if channels[i + 1] == CHANNEL_NAME then
+        joined = true
+        break
+      end
+    end
+    
+    if not joined then
+      debug("Channel not found, retrying...")
+      attemptChannelJoin()
+    end
+  end)
 end
 
 PocketMoneyCore = {}
@@ -85,6 +100,17 @@ local function UpgradeDatabase()
       checksum = nil,
       class = playerClass
     }
+  end
+end
+
+local function checkChannelStatus()
+  local id = GetChannelName(CHANNEL_NAME)
+  
+  if id == 0 then
+    return false
+  else 
+    debug("Successfully joined PCM Data sharing channel")
+    return true
   end
 end
 
@@ -201,6 +227,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     if addonName == "PocketMoney" then
       print("PickPocket loaded")
       UpgradeDatabase()
+      attemptChannelJoin()
       PocketMoneyWhatsNew.CheckUpdateNotification()
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -278,6 +305,13 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     isPickpocketLoot = false
     lastProcessedMoney = nil
     wipe(lastProcessedItems)
+  end
+end)
+
+C_Timer.NewTicker(30, function()
+  if not checkChannelStatus() then
+    debug("Channel check failed - attempting rejoin")
+    attemptChannelJoin()
   end
 end)
 
