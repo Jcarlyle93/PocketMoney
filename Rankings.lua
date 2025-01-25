@@ -31,7 +31,7 @@ function PocketMoneyRankings.SendUpdate()
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", nil, GetChannelName(CHANNEL_NAME)))
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
     end
   end
 end
