@@ -1,7 +1,5 @@
 local ADDON_PREFIX = "PMRank"
 PocketMoneyRankings = PocketMoneyRankings or {}
-local CHANNEL_NAME = "PCMSync"
-local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 
 local function RegisterAddonPrefix()
   if not C_ChatInfo.IsAddonMessagePrefixRegistered(ADDON_PREFIX) then
@@ -11,6 +9,11 @@ end
 
 -- Send
 function PocketMoneyRankings.SendUpdate()
+  local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+  if channel_num == 0 then
+      PocketMoneyCore.attemptChannelJoin()
+      return
+  end
   local realmName = GetRealmName()
   local playerName = UnitName("player")
   local messageData = {
@@ -31,7 +34,7 @@ function PocketMoneyRankings.SendUpdate()
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(PocketMoneyCore.CHANNEL_NAME))
     end
   end
 end
@@ -53,7 +56,7 @@ function PocketMoneyRankings.RequestLatestData()
   if success then
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
     if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(CHANNEL_NAME))
+      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(PocketMoneyCore.CHANNEL_NAME))
     end
   end
  end

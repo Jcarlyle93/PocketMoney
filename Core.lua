@@ -1,3 +1,4 @@
+PocketMoneyCore = {}
 local PocketMoney = CreateFrame("Frame")
 PocketMoney:RegisterEvent("ADDON_LOADED")
 PocketMoney:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
@@ -24,43 +25,48 @@ local playerName = UnitName("player")
 local _, playerClass = UnitClass("player")
 local isRogue = playerClass == "ROGUE"
 local pendingLootSlots = {}
-local CHANNEL_NAME = "PCMSync"
-local CHANNEL_PASSWORD = "pm" .. GetRealmName()
 local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
 local joinTimer = nil
+local PREFERRED_CHANNEL = 6 
 
-local function attemptChannelJoin()
+PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
+PocketMoneyCore.CHANNEL_NAME = "PCMSync"
+
+PocketMoneyCore.attemptChannelJoin = function()
   if joinAttempts >= MAX_JOIN_ATTEMPTS then
-    debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
-    return
+      debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
+      return
+  end
+
+  local function isChannelAvailable(channelNum)
+    local channels = {GetChannelList()}
+    for i = 1, #channels, 3 do
+      if channels[i] == channelNum then
+        return false
+      end
+    end
+    return true
   end
 
   joinAttempts = joinAttempts + 1
-  debug("Attempt " .. joinAttempts .. " to join " .. CHANNEL_NAME)
+  debug("Attempt " .. joinAttempts .. " to join " .. PocketMoneyCore.CHANNEL_NAME)
   
-  LeaveChannelByName(CHANNEL_NAME)
-  JoinChannelByName(CHANNEL_NAME, CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true)
-  
-  joinTimer = C_Timer.NewTimer(5, function()
-    local channels = { GetChannelList() }
-    
-    local joined = false
-    for i = 1, #channels, 3 do
-      if channels[i + 1] == CHANNEL_NAME then
-        joined = true
-        break
+  LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
+  C_Timer.After(5.0, function()
+      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true, PREFERRED_CHANNEL)
+  end)
+
+  -- Add backup channel attempt
+  joinTimer = C_Timer.NewTimer(10, function()
+      local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      if channel_num == 0 then
+          PocketMoneyCore.CHANNEL_NAME = PocketMoneyCore.CHANNEL_NAME .. "b"
+          attemptChannelJoin()
       end
-    end
-    
-    if not joined then
-      debug("Channel not found, retrying...")
-      attemptChannelJoin()
-    end
   end)
 end
 
-PocketMoneyCore = {}
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
 if isRogue then
@@ -106,7 +112,7 @@ end
 local function checkChannelStatus()
   local channels = { GetChannelList() }
   for i = 1, #channels, 3 do
-    if channels[i + 1] == CHANNEL_NAME then
+    if channels[i + 1] == PocketMoneyCore.CHANNEL_NAME then
       return true
     end
   end
@@ -226,7 +232,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     if addonName == "PocketMoney" then
       print("PickPocket loaded")
       UpgradeDatabase()
-      attemptChannelJoin()
+      PocketMoneyCore.attemptChannelJoin()
       PocketMoneyWhatsNew.CheckUpdateNotification()
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -310,7 +316,7 @@ end)
 C_Timer.NewTicker(30, function()
   if not checkChannelStatus() then
     debug("Channel check failed - attempting rejoin")
-    attemptChannelJoin()
+    PocketMoneyCore.attemptChannelJoin()
   end
 end)
 
