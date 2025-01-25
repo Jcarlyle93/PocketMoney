@@ -104,14 +104,13 @@ local function UpgradeDatabase()
 end
 
 local function checkChannelStatus()
-  local id = GetChannelName(CHANNEL_NAME)
-  
-  if id == 0 then
-    return false
-  else 
-    debug("Successfully joined PCM Data sharing channel")
-    return true
+  local channels = { GetChannelList() }
+  for i = 1, #channels, 3 do
+    if channels[i + 1] == CHANNEL_NAME then
+      return true
+    end
   end
+  return false
 end
 
 function PocketMoneyCore.FormatMoney(copper)
