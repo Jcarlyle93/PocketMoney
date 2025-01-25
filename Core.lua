@@ -28,7 +28,7 @@ local pendingLootSlots = {}
 local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
 local joinTimer = nil
-local PREFERRED_CHANNEL = 6 
+local PREFERRED_CHANNEL = 9
 
 PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyCore.CHANNEL_NAME = "PCMSync"
