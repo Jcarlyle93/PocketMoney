@@ -1,9 +1,9 @@
-local ADDON_VERSION = "1.6.5"
+local ADDON_VERSION = "1.6.6"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.6.5"] = [[
+  ["1.6.6"] = [[
 Pocket Money Updated to Version 1.6.X:
 
 - No longer reguires you to see other rogues in game for them to be added to your list!
