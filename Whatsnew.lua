@@ -1,9 +1,9 @@
-local ADDON_VERSION = "1.7.0"
+local ADDON_VERSION = "1.7.1"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.7.0"] = [[
+  ["1.7.1"] = [[
 Pocket Money Updated to Version 1.7.X:
 
 Thank-you for your patience while I fixed the data sharing issue, this is now hopefully mostly resolved, but will continue to sqaush bugs.

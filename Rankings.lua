@@ -64,7 +64,7 @@ end
 function PocketMoneyRankings.ProcessUpdate(sender, messageData)
 
   if not messageData or type(messageData) ~= "table" then
-    debug("Recieved Invalid message data from " .. toString(sender))
+    debug("Recieved Invalid message data")
     return
   end
 
@@ -222,7 +222,6 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
       end)
       
       if success then
-        print(sender)
         PocketMoneyRankings.ProcessUpdate(sender, messageData)
       else
         debug("Deserialization failed")
@@ -231,9 +230,7 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
     local _, playerName, _, channelName = ...
     if channelName == PocketMoneyCore.CHANNEL_NAME then
-      print(playerName, " joined channel, ading to list")
       onlinePlayers[playerName] = true
-      print("PlayerList: ", onlinePlayers)
       PocketMoneyRankings.RequestLatestData(playerName)
     end
   elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
