@@ -1,6 +1,6 @@
 PocketMoneyRankings = PocketMoneyRankings or {}
 local onlinePlayers = {}
-
+local lastRequestTime = {}
 local ADDON_PREFIX = "PMRank"
 local hasRequestedInitialData = false
 local realmName = GetRealmName()
@@ -16,7 +16,6 @@ end
 
 -- Send Data
 function PocketMoneyRankings.SendUpdate(target)
-  print("sent to", target)
   local messageData = {
     type = "PLAYER_UPDATE",
     player = UnitName("player"),
@@ -56,11 +55,19 @@ function PocketMoneyRankings.RequestLatestData(targetPlayer)
   end)
 
   if success then
+    local now = GetServerTime()
     if targetPlayer then
+      if lastRequestTime[targetPlayer] and (now - lastRequestTime[targetPlayer]) < 60 then
+        return
+      end
       PocketMoneyCore.SendMessage(serialized, targetPlayer)
+      lastRequestTime[targetPlayer] = now
     else
       for player in pairs(onlinePlayers) do
-        PocketMoneyCore.SendMessage(serialized, player)
+        if lastRequestTime[player] and (now - lastRequestTime[player]) > 60 then
+          PocketMoneyCore.SendMessage(serialized, player)
+          lastRequestTime[player] = now
+        end
       end
     end
   end
