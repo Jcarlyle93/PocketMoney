@@ -53,22 +53,20 @@ PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyCore.CHANNEL_NAME = "PCMSync"
 
 PocketMoneyCore.attemptChannelJoin = function()
-
-  if channelName then
-    LeaveChannelByName(channelName)
-  end
-
   if joinAttempts >= MAX_JOIN_ATTEMPTS then
     debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
      return
   end
-
   joinAttempts = joinAttempts + 1
 
-  C_Timer.After(5.0, function()
-    debug("Join attempt - Channel ID: " .. (id or "nil") .. ", Name: " .. (name or "nil"))
+  if GetChannelName(PocketMoneyCore.CHANNEL_NAME) > 0 then
+    LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
+    C_Timer.After(5, function()
+      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
+    end)
+  else
     JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
-  end)
+  end
 
   joinTimer = C_Timer.NewTimer(10, function()
     local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
@@ -229,9 +227,6 @@ PocketMoney:RegisterEvent("LOOT_OPENED")
 PocketMoney:RegisterEvent("LOOT_SLOT_CLEARED")
 PocketMoney:RegisterEvent("LOOT_CLOSED")
 PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_JOIN")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_LEAVE")
 
 PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
