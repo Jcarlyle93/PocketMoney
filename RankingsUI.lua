@@ -87,6 +87,7 @@ PocketMoneyRankings.UpdateUI = function()
 
   local rankings = {}
   local processedPlayers = {}
+  titleText:SetText("Guild Pickpocket Rankings")
 
   if PocketMoneyDB[realmName][playerName] then
     local myData = PocketMoneyDB[realmName][playerName]
