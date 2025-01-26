@@ -1,13 +1,7 @@
 PocketMoneyCore = {}
+local ADDON_PREFIX = "PMRank"
 local PocketMoney = CreateFrame("Frame")
-PocketMoney:RegisterEvent("ADDON_LOADED")
-PocketMoney:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-PocketMoney:RegisterEvent("LOOT_READY")
-PocketMoney:RegisterEvent("LOOT_OPENED")
-PocketMoney:RegisterEvent("LOOT_SLOT_CLEARED")
-PocketMoney:RegisterEvent("LOOT_CLOSED")
-PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+local CTL = _G.ChatThrottleLib
 
 local PICKPOCKET_LOCKBOXES = {
   [16885] = "Heavy Junkbox",
@@ -20,6 +14,16 @@ local function debug(msg)
   DEFAULT_CHAT_FRAME:AddMessage("PCM Debug: " .. tostring(msg), 1, 1, 0)
 end
 
+function PocketMoneyCore.SendMessage(message, target)
+  CTL:SendAddonMessage(
+    "NORMAL",
+    ADDON_PREFIX,
+    message,
+    "WHISPER",
+    target
+  )
+end
+
 local realmName = GetRealmName()
 local playerName = UnitName("player")
 local _, playerClass = UnitClass("player")
@@ -29,43 +33,6 @@ local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
 local joinTimer = nil
 local PREFERRED_CHANNEL = 9
-
-PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
-PocketMoneyCore.CHANNEL_NAME = "PCMSync"
-
-PocketMoneyCore.attemptChannelJoin = function()
-  if joinAttempts >= MAX_JOIN_ATTEMPTS then
-      debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
-      return
-  end
-
-  local function isChannelAvailable(channelNum)
-    local channels = {GetChannelList()}
-    for i = 1, #channels, 3 do
-      if channels[i] == channelNum then
-        return false
-      end
-    end
-    return true
-  end
-
-  joinAttempts = joinAttempts + 1
-  debug("Attempt " .. joinAttempts .. " to join " .. PocketMoneyCore.CHANNEL_NAME)
-  
-  LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
-  C_Timer.After(5.0, function()
-      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true, PREFERRED_CHANNEL)
-  end)
-
-  -- Add backup channel attempt
-  joinTimer = C_Timer.NewTimer(10, function()
-      local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
-      if channel_num == 0 then
-          PocketMoneyCore.CHANNEL_NAME = PocketMoneyCore.CHANNEL_NAME .. "b"
-          attemptChannelJoin()
-      end
-  end)
-end
 
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
@@ -82,8 +49,34 @@ end
 PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
 PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
-local CURRENT_DB_VERSION = 1.3
+PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
+PocketMoneyCore.CHANNEL_NAME = "PCMSync"
 
+PocketMoneyCore.attemptChannelJoin = function()
+  LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
+
+  if joinAttempts >= MAX_JOIN_ATTEMPTS then
+      debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
+      return
+  end
+
+  joinAttempts = joinAttempts + 1
+
+  C_Timer.After(5.0, function()
+      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true, PREFERRED_CHANNEL)
+  end)
+
+  -- Add backup channel attempt
+  joinTimer = C_Timer.NewTimer(10, function()
+      local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      if channel_num == 0 then
+          PocketMoneyCore.CHANNEL_NAME = PocketMoneyCore.CHANNEL_NAME .. "b"
+          attemptChannelJoin()
+      end
+  end)
+end
+
+local CURRENT_DB_VERSION = 1.3
 local function UpgradeDatabase()
   PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
     lifetimeGold = 0,
@@ -110,13 +103,7 @@ local function UpgradeDatabase()
 end
 
 local function checkChannelStatus()
-  local channels = { GetChannelList() }
-  for i = 1, #channels, 3 do
-    if channels[i + 1] == PocketMoneyCore.CHANNEL_NAME then
-      return true
-    end
-  end
-  return false
+  return GetChannelName(PocketMoneyCore.CHANNEL_NAME) ~= 0
 end
 
 function PocketMoneyCore.FormatMoney(copper)
@@ -226,13 +213,25 @@ local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
   end
 end
 
+-- Event Registration
+PocketMoney:RegisterEvent("ADDON_LOADED")
+PocketMoney:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+PocketMoney:RegisterEvent("LOOT_READY")
+PocketMoney:RegisterEvent("LOOT_OPENED")
+PocketMoney:RegisterEvent("LOOT_SLOT_CLEARED")
+PocketMoney:RegisterEvent("LOOT_CLOSED")
+PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
+PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_JOIN")
+PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_LEAVE")
+
 PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
+    C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
     if addonName == "PocketMoney" then
       print("PickPocket loaded")
       UpgradeDatabase()
-      PocketMoneyCore.attemptChannelJoin()
       PocketMoneyWhatsNew.CheckUpdateNotification()
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
@@ -302,7 +301,6 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
       pendingLootSlots[slotIndex] = nil
     end
   elseif event == "LOOT_CLOSED" then
-
     isOpeningJunkbox = false
     currentJunkboxType = nil
     wipe(pendingLootSlots)
@@ -312,10 +310,9 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     wipe(lastProcessedItems)
   end
 end)
-
 C_Timer.NewTicker(30, function()
   if not checkChannelStatus() then
-    debug("Channel check failed - attempting rejoin")
+    debug("Channel join failed - attempting rejoin")
     PocketMoneyCore.attemptChannelJoin()
   end
 end)
