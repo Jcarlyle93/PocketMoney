@@ -53,26 +53,34 @@ PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyCore.CHANNEL_NAME = "PCMSync"
 
 PocketMoneyCore.attemptChannelJoin = function()
-  LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
+
+  if channelName then
+    LeaveChannelByName(channelName)
+  end
 
   if joinAttempts >= MAX_JOIN_ATTEMPTS then
-      debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
-      return
+    debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
+     return
   end
 
   joinAttempts = joinAttempts + 1
 
   C_Timer.After(5.0, function()
-      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true, PREFERRED_CHANNEL)
+    debug("Join attempt - Channel ID: " .. (id or "nil") .. ", Name: " .. (name or "nil"))
+    JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
   end)
 
-  -- Add backup channel attempt
   joinTimer = C_Timer.NewTimer(10, function()
-      local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
-      if channel_num == 0 then
-          PocketMoneyCore.CHANNEL_NAME = PocketMoneyCore.CHANNEL_NAME .. "b"
-          attemptChannelJoin()
+    local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      
+    if channel_num == 0 then
+      CHANNEL_NAME = CHANNEL_NAME .. "b"
+      PocketMoneyCore.attemptChannelJoin()
+    else
+      if channel_num ~= PREFERRED_CHANNEL then
+        JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, true, PocketMoneyCore.PREFERRED_CHANNEL)
       end
+    end
   end)
 end
 

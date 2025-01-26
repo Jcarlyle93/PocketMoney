@@ -3,7 +3,7 @@
 ## Notes: Tracks gold made from pickpocketing
 ## Author: Worlds best rogue Indelible@Discord
 ## SavedVariables: PocketMoneyDB
-## Version: 1.7.1
+## Version: 1.7.2
 ## X-Credits: LibSerialize by Ross Nichols
 
 # Libraries
