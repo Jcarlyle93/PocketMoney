@@ -53,26 +53,32 @@ PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyCore.CHANNEL_NAME = "PCMSync"
 
 PocketMoneyCore.attemptChannelJoin = function()
-  LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
-
   if joinAttempts >= MAX_JOIN_ATTEMPTS then
-      debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
-      return
+    debug("Failed to join after " .. MAX_JOIN_ATTEMPTS .. " attempts")
+     return
   end
-
   joinAttempts = joinAttempts + 1
 
-  C_Timer.After(5.0, function()
-      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, DEFAULT_CHAT_FRAME:GetID(), true, PREFERRED_CHANNEL)
-  end)
+  if GetChannelName(PocketMoneyCore.CHANNEL_NAME) > 0 then
+    LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
+    C_Timer.After(5, function()
+      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
+    end)
+  else
+    JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
+  end
 
-  -- Add backup channel attempt
   joinTimer = C_Timer.NewTimer(10, function()
-      local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
-      if channel_num == 0 then
-          PocketMoneyCore.CHANNEL_NAME = PocketMoneyCore.CHANNEL_NAME .. "b"
-          attemptChannelJoin()
+    local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      
+    if channel_num == 0 then
+      CHANNEL_NAME = CHANNEL_NAME .. "b"
+      PocketMoneyCore.attemptChannelJoin()
+    else
+      if channel_num ~= PREFERRED_CHANNEL then
+        JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD, true, PocketMoneyCore.PREFERRED_CHANNEL)
       end
+    end
   end)
 end
 
@@ -221,9 +227,6 @@ PocketMoney:RegisterEvent("LOOT_OPENED")
 PocketMoney:RegisterEvent("LOOT_SLOT_CLEARED")
 PocketMoney:RegisterEvent("LOOT_CLOSED")
 PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_JOIN")
-PocketMoney:RegisterEvent("CHAT_MSG_CHANNEL_LEAVE")
 
 PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
