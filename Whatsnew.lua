@@ -1,15 +1,12 @@
-local ADDON_VERSION = "1.6.7"
+local ADDON_VERSION = "1.7.0"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.6.7"] = [[
-Pocket Money Updated to Version 1.6.X:
+  ["1.7.0"] = [[
+Pocket Money Updated to Version 1.7.X:
 
-- No longer reguires you to see other rogues in game for them to be added to your list!
-  This should allow the non-guild rogues toggle to populate with more usuers.
-
-Apologies for the multiple upadates while we work on resolve bugs with the new data sharing method.
+Thank-you for your patience while I fixed the data sharing issue, this is now hopefully mostly resolved, but will continue to sqaush bugs.
 
 Coming soon - Rogue Pickpocket Achievements!
 

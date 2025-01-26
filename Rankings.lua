@@ -1,21 +1,17 @@
-local ADDON_PREFIX = "PMRank"
 PocketMoneyRankings = PocketMoneyRankings or {}
 
-local function RegisterAddonPrefix()
-  if not C_ChatInfo.IsAddonMessagePrefixRegistered(ADDON_PREFIX) then
-    C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
-  end
+local ADDON_PREFIX = "PMRank"
+local hasRequestedInitialData = false
+local realmName = GetRealmName()
+local playerName = UnitName("player")
+local onlinePlayers = {}
+
+local function debug(msg)
+  DEFAULT_CHAT_FRAME:AddMessage("PCM Debug: " .. tostring(msg), 1, 1, 0)
 end
 
--- Send
-function PocketMoneyRankings.SendUpdate()
-  local channel_num = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
-  if channel_num == 0 then
-      PocketMoneyCore.attemptChannelJoin()
-      return
-  end
-  local realmName = GetRealmName()
-  local playerName = UnitName("player")
+-- Send Data
+function PocketMoneyRankings.SendUpdate(target)
   local messageData = {
     type = "PLAYER_UPDATE",
     player = UnitName("player"),
@@ -32,69 +28,66 @@ function PocketMoneyRankings.SendUpdate()
   end)
  
   if success then
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
-    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(PocketMoneyCore.CHANNEL_NAME))
+    if target then
+      PocketMoneyCore.SendMessage(serialized, name)
     end
+    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
   end
 end
 
--- Request
-function PocketMoneyRankings.RequestLatestData()
+-- Request Data
+function PocketMoneyRankings.RequestLatestData(targetPlayer)
   local messageData = {
     type = "DATA_REQUEST",
     player = UnitName("player"),
     realm = GetRealmName(),
     timestamp = GetServerTime()
   }
- 
+
   local LibSerialize = LibStub("LibSerialize")
-  local success, serialized = pcall(function() 
-    return LibSerialize:Serialize(messageData) 
+  local success, serialized = pcall(function()
+    return LibSerialize:Serialize(messageData)
   end)
- 
+
   if success then
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
-    if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
-      C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "CHANNEL", GetChannelName(PocketMoneyCore.CHANNEL_NAME))
+    if targetPlayer then
+      PocketMoneyCore.SendMessage(serialized, targetPlayer)
+    else
+      for player in pairs(onlinePlayers) do
+        PocketMoneyCore.SendMessage(serialized, player)
+      end
     end
   end
- end
+end
 
--- Recieve
-function PocketMoneyRankings.ProcessUpdate(sender, data, channel)
-  if sender:match("^" .. UnitName("player") .. "-") then
-    return
-  end
-  
-  local LibSerialize = LibStub("LibSerialize")
-  local success, messageData = pcall(function() 
-    local decoded, result = LibSerialize:Deserialize(data)
-    return result
-  end)
-  
-  if not success then
+-- Recieve Data
+function PocketMoneyRankings.ProcessUpdate(sender, messageData)
+
+  if not messageData or type(messageData) ~= "table" then
+    debug("Recieved Invalid message data from " .. toString(sender))
     return
   end
 
-  if type(messageData) ~= "table" then
+  local senderName = sender:match("^([^-]+)")
+
+  if senderName == playerName then return end -- Ignore our own message
+
+  -- Handle DATA_REQUEST type
+  if messageData.type == "DATA_REQUEST" then
+    onlinePlayers[senderName] = true
+    PocketMoneyRankings.SendUpdate(senderName)
     return
   end
 
-  local name = sender:match("^([^-]+)")
-
-  if messageData.type == "ADDON_CHECK" or messageData.type == "DATA_REQUEST" then
-    PocketMoneyRankings.SendUpdate("WHISPER", sender)
-    return
+  if not success or 
+    (messageData.type ~= "PLAYER_UPDATE" and messageData.type ~= "DATA_REQUEST") or 
+    type(messageData) ~= "table" then
+      debug("Recieved Invalid message data from " .. toString(sender))
+   return
   end
-
-  if messageData.type ~= "PLAYER_UPDATE" then
-    return
-  end
-
 
   local realmName = messageData.realm
-  local playerName = messageData.player
+  local senderName = messageData.player
   
   PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
   PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
@@ -114,9 +107,9 @@ function PocketMoneyRankings.ProcessUpdate(sender, data, channel)
   end
 
   if isGuildRogue then
-    local existingData = PocketMoneyDB[realmName].guildRankings[playerName]
+    local existingData = PocketMoneyDB[realmName].guildRankings[senderName]
     if not existingData or existingData.timestamp < messageData.timestamp then
-      PocketMoneyDB[realmName].guildRankings[playerName] = {
+      PocketMoneyDB[realmName].guildRankings[senderName] = {
         gold = messageData.gold,
         junk = messageData.junk,
         boxValue = messageData.boxValue,
@@ -124,20 +117,29 @@ function PocketMoneyRankings.ProcessUpdate(sender, data, channel)
       }
     end
   else
-    PocketMoneyDB[realmName].knownRogues[playerName] = {
-      gold = messageData.gold,
-      junk = messageData.junk,
-      boxValue = messageData.boxValue,
-      timestamp = messageData.timestamp,
-      lastSeen = GetServerTime()
-    }
+    if not PocketMoneyDB[realmName].knownRogues[senderName] then
+      PocketMoneyDB[realmName].knownRogues[senderName] = {
+        gold = messageData.gold,
+        junk = messageData.junk,
+        boxValue = messageData.boxValue,
+        timestamp = messageData.timestamp,
+        lastSeen = GetServerTime()
+      }
+    else
+      PocketMoneyDB[realmName].knownRogues[senderName] = {
+        gold = messageData.gold,
+        junk = messageData.junk,
+        boxValue = messageData.boxValue,
+        timestamp = messageData.timestamp,
+        lastSeen = GetServerTime()
+      }
+    end
   end
 end
 
+-- Update the rankings list
 function PocketMoneyRankings.ShowRankings()
   local rankings = {}
-  local realmName = GetRealmName()
-  local playerName = UnitName("player")
 
   for player, data in pairs(PocketMoneyDB[realmName].guildRankings or {}) do
     if player == playerName then
@@ -188,7 +190,6 @@ function PocketMoneyRankings.AuditGuildRankings()
       guildRogues[guildMemberName] = true
     end
   end
-
   for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
     if not guildRogues[player] then
       print("PCM Debug: Moving", player, "to known rogues (not in guild)")
@@ -196,47 +197,49 @@ function PocketMoneyRankings.AuditGuildRankings()
       PocketMoneyDB[realmName].guildRankings[player] = nil
     end
   end
-
   print("PCM Debug: Audit complete")
 end
 
-local hasRequestedInitialData = false
 local rankingsFrame = CreateFrame("Frame")
 rankingsFrame:RegisterEvent("CHAT_MSG_ADDON")
-rankingsFrame:RegisterEvent("PLAYER_LOGOUT")
-rankingsFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 rankingsFrame:RegisterEvent("ADDON_LOADED")
+rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL")
+rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL_JOIN")
+rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL_LEAVE")
+
 rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
     if addonName == "PocketMoney" then
-      RegisterAddonPrefix()
+      C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
     end
   elseif event == "CHAT_MSG_ADDON" then
-    local prefix, message, channel, sender = ...
+    local prefix, text, channel, sender = ...
     if prefix == ADDON_PREFIX then
-      if channel == "GUILD" or 
-         (channel == "CHANNEL" and PocketMoneyDB.settings.includeAllRogues) then
-        PocketMoneyRankings.ProcessUpdate(sender, message, channel)
+      local LibSerialize = LibStub("LibSerialize")
+      local success, messageData = pcall(function() 
+        return LibSerialize:Deserialize(text)
+      end)
+      
+      if success then
+        print(sender)
+        PocketMoneyRankings.ProcessUpdate(sender, messageData)
+      else
+        debug("Deserialization failed")
       end
     end
-  elseif event == "PLAYER_LOGOUT" then
-    PocketMoneyRankings.SendUpdate()
-  elseif event == "PLAYER_ENTERING_WORLD" then
-    if not hasRequestedInitialData then
-      C_Timer.After(5, function()
-        PocketMoneyRankings.SendUpdate()
-        PocketMoneyRankings.RequestLatestData()
-        hasRequestedInitialData = true
-      end)
+  elseif event == "CHAT_MSG_CHANNEL_JOIN" then
+    local _, playerName, _, channelName = ...
+    if channelName == PocketMoneyCore.CHANNEL_NAME then
+      print(playerName, " joined channel, ading to list")
+      onlinePlayers[playerName] = true
+      print("PlayerList: ", onlinePlayers)
+      PocketMoneyRankings.RequestLatestData(playerName)
+    end
+  elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
+    local _, playerName, _, channelName = ...
+    if channelName == PocketMoneyCore.CHANNEL_NAME then
+      onlinePlayers[playerName] = nil
     end
   end
- end)
-
-function PocketMoneyRankings.ToggleUI()
-  if RankingsUI:IsShown() then
-    RankingsUI:Hide()
-  else
-    RankingsUI:Show()
-  end
-end
+end)
