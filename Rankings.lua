@@ -235,17 +235,13 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
-    print(playerNew, "Joined:", channelBaseName)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
-      print("match!")
       onlinePlayers[playerNew] = true
-      print(onlinePlayers[playerNew])
       PocketMoneyRankings.RequestLatestData(playerNew)
     end
   elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
-    print(playerNew, "left:", channelBaseName)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       onlinePlayers[playerNew] = nil
     end

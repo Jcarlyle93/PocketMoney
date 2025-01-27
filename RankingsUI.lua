@@ -57,9 +57,15 @@ serverCheckbox:SetScript("OnClick", function(self)
   PocketMoneyRankings.UpdateUI()
 end)
 
-local contentFrame = CreateFrame("Frame", nil, RankingsUI)
-contentFrame:SetPoint("TOPLEFT", 20, -50)
-contentFrame:SetPoint("BOTTOMRIGHT", -20, 10)
+local scrollFrame = CreateFrame("ScrollFrame", nil, RankingsUI, "UIPanelScrollFrameTemplate")
+scrollFrame:SetPoint("TOPLEFT", 20, -50)
+scrollFrame:SetPoint("BOTTOMRIGHT", -20, 10)
+
+local scrollChild = CreateFrame("Frame")
+scrollChild:SetSize(260, 400) -- Set this dynamically if needed
+scrollFrame:SetScrollChild(scrollChild)
+
+local contentFrame = scrollChild
 
 tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
 
@@ -105,21 +111,23 @@ PocketMoneyRankings.UpdateUI = function()
   for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
     if not processedPlayers[player] then
       local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
-      table.insert(rankings, {
-        player = player,
-        total = total,
-        gold = data.gold or 0,
-        junk = data.junk or 0,
-        boxValue = data.boxValue or 0
-      })
-      processedPlayers[player] = true
+      if total > 0 and not processedPlayers[player] then
+        table.insert(rankings, {
+          player = player,
+          total = total,
+          gold = data.gold or 0,
+          junk = data.junk or 0,
+          boxValue = data.boxValue or 0
+        })
+        processedPlayers[player] = true
+      end
     end
   end
   if PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues then
     titleText:SetText("Server Pickpocket Rankings")
     for player, data in pairs(PocketMoneyDB[realmName].knownRogues) do
-      if not processedPlayers[player] then
-        local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
+      local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
+      if  total > 0 and not processedPlayers[player] then
         table.insert(rankings, {
           player = player,
           total = total,
