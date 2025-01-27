@@ -232,7 +232,6 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
-    print(playerNew, "Joined:", channelBaseName)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       onlinePlayers[playerNew] = true
       PocketMoneyRankings.RequestLatestData(playerNew)
