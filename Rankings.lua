@@ -29,7 +29,7 @@ function PocketMoneyRankings.SendUpdate(target)
     junk = dbLocation.lifetimeJunk or 0,
     boxValue = dbLocation.lifetimeBoxValue or 0,
     timestamp = GetServerTime(),
-    Main = dbLocation.Main or false,
+    main = dbLocation.main or false,
     AltOf = PocketMoneyCore.IsAltCharacter(playerName) and mainPC or nil,
     Alts = not PocketMoneyCore.IsAltCharacter(playerName) and (dbLocation.Alts or {}) or nil
   }
@@ -116,7 +116,7 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
       timestamp = messageData.timestamp,
       lastSeen = GetServerTime(),
       Guild = guildName,
-      Main = messageData.Main or false,
+      main = messageData.main or false,
       Alts = messageData.Alts or {}
     }
 
@@ -181,17 +181,41 @@ end
 function PocketMoneyRankings.AuditDB()
   if PocketMoneyDB[realmName].main then
     local mainChar = PocketMoneyDB[realmName].main
-    PocketMoneyDB[realmName][mainChar].Main = true
+    PocketMoneyDB[realmName][mainChar].main = true
     PocketMoneyDB[realmName][mainChar].Alts = PocketMoneyDB[realmName][mainChar].Alts or {}
+
+    -- Move data to Alts table if it's not already there
+    for charName, charData in pairs(PocketMoneyDB[realmName]) do
+      if type(charData) == "table" and charData.AltOf == mainChar then
+        if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
+          PocketMoneyDB[realmName][mainChar].Alts[charName] = {
+            AltOf = mainChar,
+            Guild = charData.Guild,
+            lifetimeJunk = charData.lifetimeJunk,
+            lifetimeGold = charData.lifetimeGold,
+            lifetimeBoxValue = charData.lifetimeBoxValue,
+            class = charData.class,
+            Main = false
+          }
+        end
+      end
+    end
+    if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
+      return -- don't delete as it's not moved.
+    else
+      PocketMoneyDB[realmName][playerName] = nil
+    end
+    PocketMoneyCore.updateChecksum(mainChar, charName)
+    PocketMoneyRankings.UpdateUI()
   end
 
   -- Verify alt relationships
   for charName, data in pairs(PocketMoneyDB[realmName].knownRogues) do
     -- Check for remote mains with alts
     if data.Alts and next(data.Alts) then
-      data.Main = true
+      data.main = true
     end
-    if data.Main then
+    if data.main then
       for altName, altData in pairs(data.Alts) do
         if not altData.AltOf or altData.AltOf ~= charName then
           altData.AltOf = charName
@@ -199,7 +223,32 @@ function PocketMoneyRankings.AuditDB()
       end
     end
   end
+  for realmName, realmData in pairs(PocketMoneyDB) do
+    if type(realmData) == "table" then
+        if realmData.transactions then
+            print("Removing outdated 'transactions' for realm:", realmName)
+            realmData.transactions = nil
+        end
 
+        -- Remove outdated 'guildRankings' field in realm-specific data
+        if realmData.guildRankings then
+            print("Removing outdated 'guildRankings' for realm:", realmName)
+            realmData.guildRankings = nil
+        end
+
+        if realmData.knownRogues then
+          for rogueName, rogueData in pairs(realmData.knownRogues) do
+              -- Check if the rogue is a local character (in PocketMoneyDB)
+              if realmData[rogueName]then
+                  print("Removing local character from 'knownRogues':", rogueName)
+                  realmData.knownRogues[rogueName] = nil
+              end
+          end
+      end
+    end
+end
+
+print("Old fields removed successfully.")
 end
 
 local rankingsFrame = CreateFrame("Frame")

@@ -48,19 +48,21 @@ PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
 PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 PocketMoneyCore.mainPC = PocketMoneyDB[realmName].main or nil
 
+PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or nil
+if PocketMoneyCore.mainPC then
+  PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
+end
+
 if isRogue then
-  print(PocketMoneyCore.mainPC)
-  if not PocketMoneyDB[realmName][playerName] or PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] then
-    print("Doesn't exist, making entry")
-    PocketMoneyDB[realmName][playerName] = {
-      lifetimeGold = 0,
-      lifetimeJunk = 0,
-      lifetimeBoxValue = 0,
-      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
-      checksum = nil,
-      class = playerClass
-    }
-    print("created: ", PocketMoneyDB[realmName][playerName])
+  if PocketMoneyDB[realmName][playerName] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] == nil then
+    PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
+        lifetimeGold = 0,
+        lifetimeJunk = 0,
+        lifetimeBoxValue = 0,
+        Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+        checksum = nil,
+        class = playerClass
+      }
   end
 end
 
@@ -69,15 +71,12 @@ local function UpgradeDatabase()
     print("Error: Database not initialized")
     return
   end
-  local currentVersion = PocketMoneyDB.dbVersion or 0
-  print("DB Ver Update: ", currentVersion < CURRENT_DB_VERSION)
+  local currentVersion = PocketMoneyDB.dbVersion
   local targetLocation
   if PocketMoneyCore.IsAltCharacter(playerName) then
-    print("alt")
     local mainChar = PocketMoneyDB[realmName][playerName].AltOf
     targetLocation = PocketMoneyDB[realmName][mainChar].Alts[playerName]
   else
-    print("not alt")
     targetLocation = PocketMoneyDB[realmName][playerName]
   end
   if not targetLocation then
@@ -85,20 +84,30 @@ local function UpgradeDatabase()
     return
   end
   if currentVersion < CURRENT_DB_VERSION then
-    PocketMoneyRankings.AuditDB()
-    print(targetLocation)
-    local existingData = targetLocation
-    local newData = {
-      lifetimeGold = existingData.lifetimeGold or 0,
-      lifetimeJunk = existingData.lifetimeJunk or 0, 
-      lifetimeBoxValue = existingData.lifetimeBoxValue or 0,
-      Guild = existingData.Guild or PocketMoneyCore.GetCharacterGuild(playerName),
-      Main = existingData.Main or false,
-      AltOf = existingData.AltOf or nil,
+    -- Latest Schema
+    local schema = {
+      lifetimeGold = 0,
+      lifetimeJunk = 0,
+      lifetimeBoxValue = 0,
+      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+      main = false,
+      AltOf = nil,
       checksum = nil,
-      class = playerClass
+      class = playerClass,
     }
-    targetLocation = newData
+
+    -- Remove fields not in the schema
+    for key in pairs(targetLocation) do
+      if schema[key] == nil then
+          targetLocation[key] = nil
+      end
+    end
+
+    PocketMoneyRankings.AuditDB()
+    print("UPGRADING DATABASE!")
+    for key, defaultValue in pairs(schema) do
+      targetLocation[key] = targetLocation[key] or defaultValue
+    end
     PocketMoneyDB.dbVersion = CURRENT_DB_VERSION
   end
 end
@@ -139,6 +148,19 @@ local function updateChecksum(targetCharacter, altCharacter)
       PocketMoneyDB[realmName][targetCharacter].lifetimeGold,
       PocketMoneyDB[realmName][targetCharacter].lifetimeJunk
     )
+  end
+end
+
+local function TransferAlts(oldMain, newMain)
+  if PocketMoneyDB[realmName][oldMain] and PocketMoneyDB[realmName][oldMain].Alts then
+    PocketMoneyDB[realmName][newMain].Alts = PocketMoneyDB[realmName][newMain].Alts or {}
+    for altName, altData in pairs(PocketMoneyDB[realmName][oldMain].Alts) do
+      PocketMoneyDB[realmName][newMain].Alts[altName] = altData
+      altData.AltOf = newMain
+    end   
+    PocketMoneyDB[realmName][oldMain].Alts = {}
+    PocketMoneyDB[realmName][oldMain].main = false
+    print("Transferred alts from " .. oldMain .. " to " .. newMain)
   end
 end
 
@@ -400,8 +422,13 @@ SlashCmdList["POCKETMONEY"] = function(msg)
       print("Alt characters cannot be set as main!")
       return
     end
-    PocketMoneyDB[realmName].main = playerName
-    PocketMoneyDB[realmName][playerName].main = true
+    if PocketMoneyDB[realmName].main then
+      local currentMain = PocketMoneyDB[realmName].main
+      TransferAlts(currentMain, playerName)
+    else
+      PocketMoneyDB[realmName].main = playerName
+      PocketMoneyDB[realmName][playerName].main = true
+    end
     print("Set " .. playerName .. " as your main character.")
     return
   elseif msg == "setalt" then
@@ -420,6 +447,7 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     PocketMoneyDB[realmName][playerName].AltOf = PocketMoneyDB[realmName].main
     PocketMoneyRankings.AuditDB()
     print("Set " .. playerName .. " as alt of " .. PocketMoneyDB[realmName].main)
+    PocketMoneyRankings.AuditDB()
     return
   elseif msg == "help" then
     print("Pocket Money Commands:")
