@@ -5,6 +5,7 @@ local ADDON_PREFIX = "PMRank"
 local hasRequestedInitialData = false
 local realmName = GetRealmName()
 local playerName = UnitName("player")
+local mainPC = PocketMoneyCore.mainPC
 
 local function debug(msg)
   DEFAULT_CHAT_FRAME:AddMessage("PCM Debug: " .. tostring(msg), 1, 1, 0)
@@ -16,14 +17,21 @@ end
 
 -- Send Data
 function PocketMoneyRankings.SendUpdate(target)
+  local dbLocation = PocketMoneyCore.IsAltCharacter(playerName) 
+    and PocketMoneyDB[realmName][mainPC].Alts[playerName] 
+    or PocketMoneyDB[realmName][playerName]
+
   local messageData = {
     type = "PLAYER_UPDATE",
     player = UnitName("player"),
     realm = GetRealmName(),
-    gold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0,
-    junk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0,
-    boxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue or 0,
-    timestamp = GetServerTime()
+    gold = dbLocation.lifetimeGold or 0,
+    junk = dbLocation.lifetimeJunk or 0,
+    boxValue = dbLocation.lifetimeBoxValue or 0,
+    timestamp = GetServerTime(),
+    Main = dbLocation.Main or false,
+    AltOf = PocketMoneyCore.IsAltCharacter(playerName) and mainPC or nil,
+    Alts = not PocketMoneyCore.IsAltCharacter(playerName) and (dbLocation.Alts or {}) or nil
   }
  
   local LibSerialize = LibStub("LibSerialize")
@@ -35,7 +43,6 @@ function PocketMoneyRankings.SendUpdate(target)
     if target then
       PocketMoneyCore.SendMessage(serialized, target)
     end
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, serialized, "GUILD")
   end
 end
 
@@ -81,7 +88,6 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
   end
 
   local senderName = sender:match("^([^-]+)")
-
   if senderName == playerName then return end -- Ignore our own message
 
   -- Handle DATA_REQUEST type
@@ -93,52 +99,41 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
 
   local realmName = messageData.realm
   local senderName = messageData.player
-  
+  local guildName = PocketMoneyCore.GetCharacterGuild(senderName)
+
   PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-  PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
   PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
-  local isGuildRogue = false
-  local numMembers = GetNumGuildMembers()
-  
-  for i = 1, numMembers do
-    local name, _, _, _, _, _, _, _, _, _, class = GetGuildRosterInfo(i)
-    local guildMemberName = name:match("^([^-]+)")
-    
-    if guildMemberName == messageData.player and class == "ROGUE" then
-      isGuildRogue = true
-      break
-    end
-  end
-
-  if isGuildRogue then
-    local existingData = PocketMoneyDB[realmName].guildRankings[senderName]
-    if not existingData or existingData.timestamp < messageData.timestamp then
-      PocketMoneyDB[realmName].guildRankings[senderName] = {
-        gold = messageData.gold,
-        junk = messageData.junk,
-        boxValue = messageData.boxValue,
-        timestamp = messageData.timestamp
-      }
-    end
-  else
+  if not messageData.AltOf then
     if not PocketMoneyDB[realmName].knownRogues[senderName] then
-      PocketMoneyDB[realmName].knownRogues[senderName] = {
-        gold = messageData.gold,
-        junk = messageData.junk,
-        boxValue = messageData.boxValue,
-        timestamp = messageData.timestamp,
-        lastSeen = GetServerTime()
-      }
-    else
-      PocketMoneyDB[realmName].knownRogues[senderName] = {
-        gold = messageData.gold,
-        junk = messageData.junk,
-        boxValue = messageData.boxValue,
-        timestamp = messageData.timestamp,
-        lastSeen = GetServerTime()
-      }
+      PocketMoneyDB[realmName].knownRogues[senderName] = {}
     end
+
+    PocketMoneyDB[realmName].knownRogues[senderName] = {
+      gold = messageData.gold,
+      junk = messageData.junk,
+      boxValue = messageData.boxValue,
+      timestamp = messageData.timestamp,
+      lastSeen = GetServerTime(),
+      Guild = guildName,
+      Main = messageData.Main or false,
+      Alts = messageData.Alts or {}
+    }
+
+  else
+    local mainChar = messageData.AltOf
+    if not PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] then
+      PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {}
+    end
+    PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {
+      gold = messageData.gold,
+      junk = messageData.junk,
+      boxValue = messageData.boxValue,
+      timestamp = messageData.timestamp,
+      lastSeen = GetServerTime(),
+      Guild = guildName,
+      AltOf = messageData.AltOf
+    }
   end
 end
 
@@ -183,26 +178,28 @@ function PocketMoneyRankings.ShowRankings()
   end
 end
 
-function PocketMoneyRankings.AuditGuildRankings()
-  local realmName = GetRealmName()
-  print("PCM Debug: Starting guild rankings audit...")
-  local guildRogues = {}
-  local numMembers = GetNumGuildMembers()
-  for i = 1, numMembers do
-    local name, _, _, _, _, _, _, _, _, _, class = GetGuildRosterInfo(i)
-    local guildMemberName = name:match("^([^-]+)")
-    if class == "ROGUE" then
-      guildRogues[guildMemberName] = true
+function PocketMoneyRankings.AuditDB()
+  if PocketMoneyDB[realmName].main then
+    local mainChar = PocketMoneyDB[realmName].main
+    PocketMoneyDB[realmName][mainChar].Main = true
+    PocketMoneyDB[realmName][mainChar].Alts = PocketMoneyDB[realmName][mainChar].Alts or {}
+  end
+
+  -- Verify alt relationships
+  for charName, data in pairs(PocketMoneyDB[realmName].knownRogues) do
+    -- Check for remote mains with alts
+    if data.Alts and next(data.Alts) then
+      data.Main = true
+    end
+    if data.Main then
+      for altName, altData in pairs(data.Alts) do
+        if not altData.AltOf or altData.AltOf ~= charName then
+          altData.AltOf = charName
+        end
+      end
     end
   end
-  for player, data in pairs(PocketMoneyDB[realmName].guildRankings) do
-    if not guildRogues[player] then
-      print("PCM Debug: Moving", player, "to known rogues (not in guild)")
-      PocketMoneyDB[realmName].knownRogues[player] = data
-      PocketMoneyDB[realmName].guildRankings[player] = nil
-    end
-  end
-  print("PCM Debug: Audit complete")
+
 end
 
 local rankingsFrame = CreateFrame("Frame")
@@ -237,15 +234,12 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
     local playerNew = getNameWithoutRealm(playerName)
     print(playerNew, "Joined:", channelBaseName)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
-      print("match!")
       onlinePlayers[playerNew] = true
-      print(onlinePlayers[playerNew])
       PocketMoneyRankings.RequestLatestData(playerNew)
     end
   elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
-    print(playerNew, "left:", channelBaseName)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       onlinePlayers[playerNew] = nil
     end
