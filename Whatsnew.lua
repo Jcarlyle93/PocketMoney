@@ -1,20 +1,18 @@
-local ADDON_VERSION = "1.8.0"
+local ADDON_VERSION = "1.9.0"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.8.0"] = [[
-Pocket Money Updated to Version 1.8.X:
+  ["1.9.0"] = [[
+Pocket Money Updated to Version 1.9.X:
 
 Features:
-- You can now set a character as your main rogue with "/pm setmain" when logged on main.
-- You can now set alt rogues as alts with "/pm setalt" when logged in on alt.
+- You can now set a character as your main rogue.
+- You can now set alt rogues as alts.
 
 UI:
-- Added handled overflow for rankings window (scroll frame)
-- Total will show combined value of all rogues (Main + Alts)
-- Rankings will only show non-alts, due to (see above).
-- Tooltip will show character breakdowns
+- Settings UI added. /pm settings - or use the minimap icon!
+- New option for popout frame!
 
 Enjoy the update!
 Pocket Money, for rogues, by rogues.

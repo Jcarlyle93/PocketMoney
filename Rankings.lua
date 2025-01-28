@@ -136,6 +136,16 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
     return
   end
 
+  if messageData.type == "MAIN_CHANGE" then
+    local realmName = messageData.realm 
+    if messageData.oldMain then
+      PocketMoneyDB[realmName].knownRogues[messageData.oldMain] = nil
+    end
+    PocketMoneyDB[realmName].knownRogues[messageData.newMain] = messageData.mainData
+    AuditKnownRogues(realmName, messageData.newMain, false, messageData.mainData)
+    return
+  end
+
   local realmName = messageData.realm
   local senderName = messageData.player
   local guildName = PocketMoneyCore.GetCharacterGuild(senderName)
@@ -221,6 +231,28 @@ function PocketMoneyRankings.ShowRankings()
     if i <= 10 then
       print(string.format("%d. %s - %s", i, data.player, 
         PocketMoneyCore.FormatMoney(data.total)))
+    end
+  end
+end
+
+function PocketMoneyRankings.BroadcastMainChange(oldMain, newMain)
+  local updateData = {
+    type = "MAIN_CHANGE",
+    realm = realmName,
+    oldMain = oldMain,
+    newMain = newMain,
+    mainData = PocketMoneyDB[realmName][newMain],
+    timestamp = GetServerTime()
+  }
+
+  local LibSerialize = LibStub("LibSerialize")
+  local success, serialized = pcall(function() 
+    return LibSerialize:Serialize(updateData) 
+  end)
+
+  if success then
+    for player in pairs(PocketMoneyDB.tempData.onlinePlayers) do
+      PocketMoneyCore.SendMessage(serialized, player)
     end
   end
 end
