@@ -3,6 +3,24 @@ local ADDON_PREFIX = "PMRank"
 local PocketMoney = CreateFrame("Frame")
 local CTL = _G.ChatThrottleLib
 
+-- Variable Initialisation 
+local pendingLootSlots = {}
+local MAX_JOIN_ATTEMPTS = 3
+local joinAttempts = 0
+local joinTimer = nil
+local PREFERRED_CHANNEL = 9
+local sessionGold = 0
+local sessionJunk = 0
+local sessionBoxValue = 0
+local isPickpocketLoot = false
+local lastProcessedMoney = nil
+local lastProcessedItems = {}
+local lastLootTime = 0
+local sessionStartTime = GetServerTime()
+local maxGoldPerHour = 100 * 10000
+local pickpocketedBoxes = {}
+local isOpeningJunkbox = false
+local currentJunkboxType = nil
 local PICKPOCKET_LOCKBOXES = {
   [16885] = "Heavy Junkbox",
   [16884] = "Sturdy Junkbox",
@@ -10,6 +28,93 @@ local PICKPOCKET_LOCKBOXES = {
   [16883] = "Worn Junkbox"
 }
 
+-- Get Player Details
+local realmName = GetRealmName()
+local playerName = UnitName("player")
+local _, playerClass = UnitClass("player")
+local isRogue = playerClass == "ROGUE"
+function PocketMoneyCore.GetCharacterGuild(Name)
+  local guildName = GetGuildInfo(Name)
+  return guildName or "NoGuild"
+end
+
+-- Database Initialisation
+local CURRENT_DB_VERSION = 2.0
+
+PocketMoneyDB = PocketMoneyDB or {}
+PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
+PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
+PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
+PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
+PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
+PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
+PocketMoneyCore.mainPC = PocketMoneyDB[realmName].main or nil
+
+PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or nil
+if PocketMoneyCore.mainPC then
+  PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
+end
+
+if isRogue then
+  if PocketMoneyDB[realmName][playerName] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] == nil then
+    PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
+        lifetimeGold = 0,
+        lifetimeJunk = 0,
+        lifetimeBoxValue = 0,
+        Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+        checksum = nil,
+        class = playerClass
+      }
+  end
+end
+
+local function UpgradeDatabase()
+  if not PocketMoneyDB then
+    print("Error: Database not initialized")
+    return
+  end
+  local currentVersion = PocketMoneyDB.dbVersion
+  local targetLocation
+  if PocketMoneyCore.IsAltCharacter(playerName) then
+    local mainChar = PocketMoneyDB[realmName][playerName].AltOf
+    targetLocation = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+  else
+    targetLocation = PocketMoneyDB[realmName][playerName]
+  end
+  if not targetLocation then
+    print("Error: Database not initialized")
+    return
+  end
+  if currentVersion < CURRENT_DB_VERSION then
+    -- Latest Schema
+    local schema = {
+      lifetimeGold = 0,
+      lifetimeJunk = 0,
+      lifetimeBoxValue = 0,
+      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+      main = false,
+      AltOf = nil,
+      checksum = nil,
+      class = playerClass,
+    }
+
+    -- Remove fields not in the schema
+    for key in pairs(targetLocation) do
+      if schema[key] == nil then
+          targetLocation[key] = nil
+      end
+    end
+
+    PocketMoneyRankings.AuditDB()
+    print("UPGRADING DATABASE!")
+    for key, defaultValue in pairs(schema) do
+      targetLocation[key] = targetLocation[key] or defaultValue
+    end
+    PocketMoneyDB.dbVersion = CURRENT_DB_VERSION
+  end
+end
+
+-- Helper Functions
 local function debug(msg)
   DEFAULT_CHAT_FRAME:AddMessage("PCM Debug: " .. tostring(msg), 1, 1, 0)
 end
@@ -24,31 +129,44 @@ function PocketMoneyCore.SendMessage(message, target)
   )
 end
 
-local realmName = GetRealmName()
-local playerName = UnitName("player")
-local _, playerClass = UnitClass("player")
-local isRogue = playerClass == "ROGUE"
-local pendingLootSlots = {}
-local MAX_JOIN_ATTEMPTS = 3
-local joinAttempts = 0
-local joinTimer = nil
-local PREFERRED_CHANNEL = 9
-
-PocketMoneyDB = PocketMoneyDB or {}
-PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-if isRogue then
-  PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
-    lifetimeGold = 0,
-    lifetimeJunk = 0,
-    lifetimeBoxValue = 0,
-    checksum = nil,
-    class = playerClass
-  }
+PocketMoneyCore.IsAltCharacter = function(name)
+  local mainPC = PocketMoneyDB[realmName].main
+  if not mainPC or not PocketMoneyDB[realmName][mainPC] then
+    return false
+  end
+  if not PocketMoneyDB[realmName][mainPC].Alts then
+    PocketMoneyDB[realmName][mainPC].Alts = {}
+  end
+  return PocketMoneyDB[realmName][mainPC].Alts[name] ~= nil
 end
 
-PocketMoneyDB[realmName].guildRankings = PocketMoneyDB[realmName].guildRankings or {}
-PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
+local function updateChecksum(targetCharacter, altCharacter)
+  if altCharacter then
+    local gold = PocketMoneyDB[realmName][targetCharacter].Alts[altCharacter].lifetimeGold or 0
+    local junk = PocketMoneyDB[realmName][targetCharacter].Alts[altCharacter].lifetimeJunk or 0
+    PocketMoneyDB[realmName][targetCharacter].Alts[altCharacter].checksum = PocketMoneySecurity.generateChecksum(gold, junk)
+  else
+    PocketMoneyDB[realmName][targetCharacter].checksum = PocketMoneySecurity.generateChecksum(
+      PocketMoneyDB[realmName][targetCharacter].lifetimeGold,
+      PocketMoneyDB[realmName][targetCharacter].lifetimeJunk
+    )
+  end
+end
 
+local function TransferAlts(oldMain, newMain)
+  if PocketMoneyDB[realmName][oldMain] and PocketMoneyDB[realmName][oldMain].Alts then
+    PocketMoneyDB[realmName][newMain].Alts = PocketMoneyDB[realmName][newMain].Alts or {}
+    for altName, altData in pairs(PocketMoneyDB[realmName][oldMain].Alts) do
+      PocketMoneyDB[realmName][newMain].Alts[altName] = altData
+      altData.AltOf = newMain
+    end   
+    PocketMoneyDB[realmName][oldMain].Alts = {}
+    PocketMoneyDB[realmName][oldMain].main = false
+    print("Transferred alts from " .. oldMain .. " to " .. newMain)
+  end
+end
+
+-- Chat Channel Initialisation
 PocketMoneyCore.CHANNEL_PASSWORD = "pm" .. GetRealmName()
 PocketMoneyCore.CHANNEL_NAME = "PCMSync"
 
@@ -82,36 +200,11 @@ PocketMoneyCore.attemptChannelJoin = function()
   end)
 end
 
-local CURRENT_DB_VERSION = 1.3
-local function UpgradeDatabase()
-  PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
-    lifetimeGold = 0,
-    lifetimeJunk = 0,
-    lifetimeBoxValue = 0,
-    checksum = nil,
-    class = playerClass
-  }
-
-  if not PocketMoneyDB[realmName][playerName].dbVersion or PocketMoneyDB[realmName][playerName].dbVersion < CURRENT_DB_VERSION then
-    local existingGold = PocketMoneyDB[realmName][playerName].lifetimeGold or 0
-    local existingJunk = PocketMoneyDB[realmName][playerName].lifetimeJunk or 0
-    local existingBoxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue or 0
-
-    PocketMoneyDB[realmName][playerName] = {
-      lifetimeGold = existingGold,
-      lifetimeJunk = existingJunk,
-      lifetimeBoxValue = existingBoxValue,
-      dbVersion = CURRENT_DB_VERSION,
-      checksum = nil,
-      class = playerClass
-    }
-  end
-end
-
 local function checkChannelStatus()
   return GetChannelName(PocketMoneyCore.CHANNEL_NAME) ~= 0
 end
 
+-- Formatting Values
 function PocketMoneyCore.FormatMoney(copper)
   local gold = math.floor(copper / 10000)
   local silver = math.floor((copper % 10000) / 100)
@@ -122,28 +215,6 @@ function PocketMoneyCore.FormatMoney(copper)
   str = str .. "|cFFB87333" .. copperRem .. "c|r"
   
   return str
-end
-
-local sessionGold = 0
-local sessionJunk = 0
-local sessionBoxValue = 0
-local isPickpocketLoot = false
-local lastProcessedMoney = nil
-local lastProcessedItems = {}
-local lastLootTime = 0
-local sessionStartTime = GetServerTime()
-local maxGoldPerHour = 100 * 10000
-local pickpocketedBoxes = {}
-local isOpeningJunkbox = false
-local currentJunkboxType = nil
-
-local function updateValues(gold, junk)
-  PocketMoneyDB[realmName][playerName].lifetimeGold = gold
-  PocketMoneyDB[realmName][playerName].lifetimeJunk = junk
-  PocketMoneyDB[realmName][playerName].checksum = PocketMoneySecurity.generateChecksum(
-    PocketMoneyDB[realmName][playerName].lifetimeGold, 
-    PocketMoneyDB[realmName][playerName].lifetimeJunk
-  )
 end
 
 local function parseMoneyString(moneyStr)
@@ -160,12 +231,15 @@ local function parseMoneyString(moneyStr)
   return copper
 end
 
-local function updateBoxValue(value, debug_source)
-  sessionBoxValue = sessionBoxValue + value
-  PocketMoneyDB[realmName][playerName].lifetimeBoxValue = PocketMoneyDB[realmName][playerName].lifetimeBoxValue + value
-end
-
+-- Managing PP Value updates
 local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
+  local targetCharacter = playerName
+  local isAlt = PocketMoneyDB[realmName][playerName].AltOf
+  
+  if isAlt then
+    targetCharacter = PocketMoneyDB[realmName][playerName].AltOf
+  end
+
   if lootSlotType == 1 then
     if itemLink and not lastProcessedItems[itemLink] then
       local itemID = GetItemInfoInstant(itemLink)
@@ -175,7 +249,15 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
       elseif itemSellPrice then
         local totalValue = itemSellPrice * (quantity or 1)
         sessionJunk = sessionJunk + totalValue
-        PocketMoneyDB[realmName][playerName].lifetimeJunk = PocketMoneyDB[realmName][playerName].lifetimeJunk + totalValue
+        
+        if isAlt then
+          PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk = 
+            (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk or 0) + totalValue
+        else
+          PocketMoneyDB[realmName][playerName].lifetimeJunk = 
+            PocketMoneyDB[realmName][playerName].lifetimeJunk + totalValue
+        end
+        
         lastProcessedItems[itemLink] = true
       end
     end
@@ -183,13 +265,37 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
     if item and item ~= lastProcessedMoney then
       local copper = parseMoneyString(item)
       sessionGold = sessionGold + copper
-      PocketMoneyDB[realmName][playerName].lifetimeGold = PocketMoneyDB[realmName][playerName].lifetimeGold + copper
+      
+      if isAlt then
+        PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold = 
+          (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold or 0) + copper
+      else
+        PocketMoneyDB[realmName][playerName].lifetimeGold = PocketMoneyDB[realmName][playerName].lifetimeGold + copper
+      end
+      
       lastProcessedMoney = item
-      PocketMoneyDB[realmName].guildRankings[playerName] = {
-        gold = PocketMoneyDB[realmName][playerName].lifetimeGold,
-        timestamp = GetServerTime()
-      }
     end
+  end
+
+  if isAlt then
+    updateChecksum(targetCharacter, playerName)
+  else 
+    updateChecksum(playerName)
+  end
+end
+
+local function updateBoxValue(value, debug_source)
+  sessionBoxValue = sessionBoxValue + value
+  local targetCharacter = playerName
+  local isAlt = PocketMoneyDB[realmName][playerName].AltOf
+  
+  if isAlt then
+    targetCharacter = PocketMoneyDB[realmName][playerName].AltOf
+    PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue = 
+      (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue or 0) + value
+  else
+    PocketMoneyDB[realmName][playerName].lifetimeBoxValue = 
+      PocketMoneyDB[realmName][playerName].lifetimeBoxValue + value
   end
 end
 
@@ -197,25 +303,52 @@ local function ProcessJunkboxLoot(lootSlotType, itemLink, item, quantity)
   if not isOpeningJunkbox or not currentJunkboxType then
     return
   end
-  if lootSlotType == 1 then  -- Item loot
+ 
+  local targetCharacter = playerName
+  local isAlt = PocketMoneyDB[realmName][playerName].AltOf
+  if isAlt then
+    targetCharacter = PocketMoneyDB[realmName][playerName].AltOf
+  end
+ 
+  if lootSlotType == 1 then
     if itemLink and not lastProcessedItems[itemLink] then
       local itemID = GetItemInfoInstant(itemLink)
       local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
       
       if itemSellPrice then
         local totalValue = itemSellPrice * (quantity or 1)
-        updateBoxValue(totalValue, "Junkbox Item")
+        if isAlt then
+          PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue = 
+            (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue or 0) + totalValue
+        else
+          PocketMoneyDB[realmName][playerName].lifetimeBoxValue = 
+            PocketMoneyDB[realmName][playerName].lifetimeBoxValue + totalValue
+        end
+        sessionBoxValue = sessionBoxValue + totalValue
         lastProcessedItems[itemLink] = true
       end
     end
-  elseif lootSlotType == 2 then  -- Money loot
+  elseif lootSlotType == 2 then
     if item and item ~= lastProcessedMoney then
       local copper = parseMoneyString(item)
       if copper > 0 then
-        updateBoxValue(copper, "Junkbox Money")
+        if isAlt then
+          PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue = 
+            (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeBoxValue or 0) + copper
+        else
+          PocketMoneyDB[realmName][playerName].lifetimeBoxValue = 
+            PocketMoneyDB[realmName][playerName].lifetimeBoxValue + copper
+        end
+        sessionBoxValue = sessionBoxValue + copper
         lastProcessedMoney = item
       end
     end
+  end
+ 
+  if isAlt then
+    updateChecksum(targetCharacter, playerName)
+  else 
+    updateChecksum(playerName)
   end
 end
 
@@ -334,25 +467,71 @@ SlashCmdList["POCKETMONEY"] = function(msg)
   elseif msg == "rankings" or msg == "rank" then
     PocketMoneyRankings.ToggleUI()
     return
+  elseif msg == "setmain" then
+    if not isRogue then
+      print("Only rogues can be set as a main!")
+      return
+    end
+    if PocketMoneyDB[realmName][playerName].AltOf then
+      print("Alt characters cannot be set as main!")
+      return
+    end
+    if PocketMoneyDB[realmName].main then
+      local currentMain = PocketMoneyDB[realmName].main
+      TransferAlts(currentMain, playerName)
+    else
+      PocketMoneyDB[realmName].main = playerName
+      PocketMoneyDB[realmName][playerName].main = true
+    end
+    print("Set " .. playerName .. " as your main character.")
+    return
+  elseif msg == "setalt" then
+    if not isRogue then
+      print("Only rogues can be set as alts!")
+      return
+    end
+    if not PocketMoneyDB[realmName].main then
+      print("No main character set - use /pm setmain first!")
+      return
+    end
+    if playerName == PocketMoneyDB[realmName].main then
+      print("Can't set a main as an alt!")
+      return
+    end
+    PocketMoneyDB[realmName][playerName].AltOf = PocketMoneyDB[realmName].main
+    PocketMoneyRankings.AuditDB()
+    print("Set " .. playerName .. " as alt of " .. PocketMoneyDB[realmName].main)
+    PocketMoneyRankings.AuditDB()
+    return
   elseif msg == "help" then
     print("Pocket Money Commands:")
     print("  /pm - Show current statistics")
-    print("  /pm rankings - Show guild rankings")
+    print("  /pm rankings - Show rankings")
+    print("  /pm setmain - Set current character as main")
+    print("  /pm setalt - Set current character as alt of main")
     print("  /pm clear - Reset all statistics")
     return
   elseif msg == "audit" then
-    PocketMoneyRankings.AuditGuildRankings()
+    PocketMoneyRankings.AuditDB()
     return
   end
   if not isRogue then
     print("You're not a rogue!")
     return
   end
+  local statsData
+  if PocketMoneyCore.IsAltCharacter(playerName) then
+      local mainChar = PocketMoneyDB[realmName][playerName].AltOf
+      statsData = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+  else
+      statsData = PocketMoneyDB[realmName][playerName]
+  end
+
   print("----------------------------------------")
   print("|cFF9370DB[Lifetime]|r:")
-  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeGold))
-  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeJunk))
-  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeBoxValue))
+  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeGold))
+  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeJunk))
+  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeBoxValue))
   print("|cFF00FF00[Session]|r:")
   print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
   print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
