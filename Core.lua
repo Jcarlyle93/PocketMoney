@@ -9,9 +9,6 @@ local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
 local joinTimer = nil
 local PREFERRED_CHANNEL = 9
-local sessionGold = 0
-local sessionJunk = 0
-local sessionBoxValue = 0
 local isPickpocketLoot = false
 local lastProcessedMoney = nil
 local lastProcessedItems = {}
@@ -28,6 +25,11 @@ local PICKPOCKET_LOCKBOXES = {
   [16883] = "Worn Junkbox"
 }
 
+-- Global Vars
+sessionGold = 0
+sessionJunk = 0
+sessionBoxValue = 0
+
 -- Get Player Details
 local realmName = GetRealmName()
 local playerName = UnitName("player")
@@ -42,6 +44,9 @@ end
 local CURRENT_DB_VERSION = 2.0
 
 PocketMoneyDB = PocketMoneyDB or {}
+PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
+PocketMoneyDB.UsePopoutDisplay  = PocketMoneyDB.UsePopoutDisplay or false
+PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
 PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
@@ -58,13 +63,16 @@ end
 if isRogue then
   if PocketMoneyDB[realmName][playerName] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] == nil then
     PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
-        lifetimeGold = 0,
-        lifetimeJunk = 0,
-        lifetimeBoxValue = 0,
-        Guild = PocketMoneyCore.GetCharacterGuild(playerName),
-        checksum = nil,
-        class = playerClass
-      }
+      lifetimeGold = 0,
+      lifetimeJunk = 0,
+      lifetimeBoxValue = 0,
+      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+      checksum = nil,
+      class = playerClass
+    }
+    if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
+      PocketMoneyCore.SetAsAlt(playerName)
+    end
   end
 end
 
@@ -153,6 +161,51 @@ local function updateChecksum(targetCharacter, altCharacter)
   end
 end
 
+-- Managing Alts
+function PocketMoneyCore.SetAsAlt(characterName)
+  if not characterName then characterName = playerName end
+  
+  if not isRogue then
+    return false
+  end
+  
+  if not PocketMoneyDB[realmName].main then
+    return false
+  end
+  
+  if characterName == PocketMoneyDB[realmName].main then
+    return false
+  end
+
+  PocketMoneyDB[realmName][characterName].AltOf = PocketMoneyDB[realmName].main
+  PocketMoneyRankings.AuditDB()
+  print("Set " .. characterName .. " as alt of " .. PocketMoneyDB[realmName].main)
+  return true
+end
+
+function PocketMoneyCore.RemoveAlt(characterName)
+  if not characterName then characterName = playerName end
+  
+  if not PocketMoneyCore.IsAltCharacter(characterName) then
+    return false
+  end
+  
+  local mainChar = PocketMoneyDB[realmName].main
+  if PocketMoneyDB[realmName][mainChar] and 
+     PocketMoneyDB[realmName][mainChar].Alts and 
+     PocketMoneyDB[realmName][mainChar].Alts[characterName] then
+    PocketMoneyDB[realmName][mainChar].Alts[characterName] = nil
+  end
+  
+  if PocketMoneyDB[realmName][characterName] then
+    PocketMoneyDB[realmName][characterName].AltOf = nil
+  end
+  
+  PocketMoneyRankings.AuditDB()
+  print("Removed " .. characterName .. " as alt")
+  return true
+end
+
 local function TransferAlts(oldMain, newMain)
   if PocketMoneyDB[realmName][oldMain] and PocketMoneyDB[realmName][oldMain].Alts then
     PocketMoneyDB[realmName][newMain].Alts = PocketMoneyDB[realmName][newMain].Alts or {}
@@ -164,6 +217,56 @@ local function TransferAlts(oldMain, newMain)
     PocketMoneyDB[realmName][oldMain].main = false
     print("Transferred alts from " .. oldMain .. " to " .. newMain)
   end
+end
+
+-- Manage Main Character Change!
+function PocketMoneyCore.SetNewMain(newMainName)
+  if not newMainName or not PocketMoneyDB[realmName][newMainName] then
+    return false, "Invalid character name"
+  end
+
+  -- Temporary storage for alts
+  local tempAltHolder = {}
+  local currentMain = PocketMoneyDB[realmName].main
+
+  -- Step 1: Store current alts if there's a main
+  if currentMain and PocketMoneyDB[realmName][currentMain] then
+    if PocketMoneyDB[realmName][currentMain].Alts then
+      for altName, altData in pairs(PocketMoneyDB[realmName][currentMain].Alts) do
+        tempAltHolder[altName] = altData
+      end
+      -- Clear the alts table from current main
+      PocketMoneyDB[realmName][currentMain].Alts = nil
+    end
+
+    -- Step 2: Convert current main to alt
+    PocketMoneyDB[realmName][currentMain].main = false
+    PocketMoneyDB[realmName][currentMain].AltOf = newMainName
+    tempAltHolder[currentMain] = PocketMoneyDB[realmName][currentMain]
+  end
+
+  -- Step 3: Handle new main if it was an alt
+  if tempAltHolder[newMainName] then
+    local newMainData = PocketMoneyDB[realmName][newMainName]
+    newMainData.AltOf = nil
+    tempAltHolder[newMainName] = nil
+  end
+
+  -- Step 4: Set up new main
+  PocketMoneyDB[realmName].main = newMainName
+  PocketMoneyDB[realmName][newMainName].main = true
+  PocketMoneyDB[realmName][newMainName].Alts = {}
+
+  -- Step 5: Move alts to new main
+  for altName, altData in pairs(tempAltHolder) do
+    PocketMoneyDB[realmName][newMainName].Alts[altName] = altData
+    altData.AltOf = newMainName
+  end
+
+  wipe(tempAltHolder)
+  PocketMoneyRankings.AuditDB()
+  PocketMoneyRankings.BroadcastMainChange(currentMain, newMainName)
+  return true, "Successfully set " .. newMainName .. " as main character"
 end
 
 -- Chat Channel Initialisation
@@ -206,6 +309,10 @@ end
 
 -- Formatting Values
 function PocketMoneyCore.FormatMoney(copper)
+  if not copper or type(copper) ~= "number" then
+    return "0c"
+  end
+
   local gold = math.floor(copper / 10000)
   local silver = math.floor((copper % 10000) / 100)
   local copperRem = copper % 100
@@ -527,15 +634,20 @@ SlashCmdList["POCKETMONEY"] = function(msg)
       statsData = PocketMoneyDB[realmName][playerName]
   end
 
-  print("----------------------------------------")
-  print("|cFF9370DB[Lifetime]|r:")
-  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeGold))
-  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeJunk))
-  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeBoxValue))
-  print("|cFF00FF00[Session]|r:")
-  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
-  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
-  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(sessionBoxValue))
-  print("----------------------------------------")
-  print("Use '/pm rank' to see how you compare!")
+  if PocketMoneyDB.UsePopoutDisplay then
+    PocketMoneyPopoutUI.Toggle()
+    return
+  else
+    print("----------------------------------------")
+    print("|cFF9370DB[Lifetime]|r:")
+    print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeGold))
+    print("  Junk Items: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeJunk))
+    print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeBoxValue))
+    print("|cFF00FF00[Session]|r:")
+    print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
+    print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))
+    print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(sessionBoxValue))
+    print("----------------------------------------")
+    print("Use '/pm rank' to see how you compare!")
+  end
 end

@@ -1,11 +1,11 @@
 local processedPlayers = {}
 local BACKDROP = {
   bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-  edgeFile = "Interface\\Buttons\\WHITE8X8",
+  edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
   tile = true,
-  tileSize = 1,
-  edgeSize = 1,
-  insets = { left = 1, right = 1, top = 1, bottom = 1 }
+  tileSize = 32,
+  edgeSize = 32,
+  insets = { left = 11, right = 12, top = 12, bottom = 11 }
 }
 
 local realmName = GetRealmName()
