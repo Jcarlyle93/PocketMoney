@@ -267,3 +267,13 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
     end
   end
 end)
+
+SLASH_POCKETMONEYSETTINGS1 = "/pmset"
+SLASH_POCKETMONEYSETTINGS2 = "/pmsettings"
+SlashCmdList["POCKETMONEYSETTINGS"] = function()
+    if SettingsUI:IsShown() then
+        SettingsUI:Hide()
+    else
+        SettingsUI:Show()
+    end
+end
