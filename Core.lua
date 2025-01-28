@@ -42,6 +42,8 @@ end
 local CURRENT_DB_VERSION = 2.0
 
 PocketMoneyDB = PocketMoneyDB or {}
+PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
+PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
 PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
@@ -230,6 +232,58 @@ local function parseMoneyString(moneyStr)
 end
 
 -- Managing PP Value updates
+local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
+  local targetCharacter = playerName
+  local isAlt = PocketMoneyDB[realmName][playerName].AltOf
+  
+  if isAlt then
+    targetCharacter = PocketMoneyDB[realmName][playerName].AltOf
+  end
+
+  if lootSlotType == 1 then
+    if itemLink and not lastProcessedItems[itemLink] then
+      local itemID = GetItemInfoInstant(itemLink)
+      local _, _, _, _, _, _, _, _, _, _, itemSellPrice = GetItemInfo(itemLink)
+      if PICKPOCKET_LOCKBOXES[itemID] then
+        lastProcessedItems[itemLink] = true
+      elseif itemSellPrice then
+        local totalValue = itemSellPrice * (quantity or 1)
+        sessionJunk = sessionJunk + totalValue
+        
+        if isAlt then
+          PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk = 
+            (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk or 0) + totalValue
+        else
+          PocketMoneyDB[realmName][playerName].lifetimeJunk = 
+            PocketMoneyDB[realmName][playerName].lifetimeJunk + totalValue
+        end
+        
+        lastProcessedItems[itemLink] = true
+      end
+    end
+  elseif lootSlotType == 2 then
+    if item and item ~= lastProcessedMoney then
+      local copper = parseMoneyString(item)
+      sessionGold = sessionGold + copper
+      
+      if isAlt then
+        PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold = 
+          (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold or 0) + copper
+      else
+        PocketMoneyDB[realmName][playerName].lifetimeGold = PocketMoneyDB[realmName][playerName].lifetimeGold + copper
+      end
+      
+      lastProcessedMoney = item
+    end
+  end
+
+  if isAlt then
+    updateChecksum(targetCharacter, playerName)
+  else 
+    updateChecksum(playerName)
+  end
+end
+
 local function updateBoxValue(value, debug_source)
   sessionBoxValue = sessionBoxValue + value
   local targetCharacter = playerName
@@ -465,11 +519,19 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     print("You're not a rogue!")
     return
   end
+  local statsData
+  if PocketMoneyCore.IsAltCharacter(playerName) then
+      local mainChar = PocketMoneyDB[realmName][playerName].AltOf
+      statsData = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+  else
+      statsData = PocketMoneyDB[realmName][playerName]
+  end
+
   print("----------------------------------------")
   print("|cFF9370DB[Lifetime]|r:")
-  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeGold))
-  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeJunk))
-  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(PocketMoneyDB[realmName][playerName].lifetimeBoxValue))
+  print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeGold))
+  print("  Junk Items: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeJunk))
+  print("  Junk Box Value: " .. PocketMoneyCore.FormatMoney(statsData.lifetimeBoxValue))
   print("|cFF00FF00[Session]|r:")
   print("  Raw Gold: " .. PocketMoneyCore.FormatMoney(sessionGold))
   print("  Junk Items: " .. PocketMoneyCore.FormatMoney(sessionJunk))

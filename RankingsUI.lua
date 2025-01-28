@@ -1,4 +1,3 @@
-local rankings = {}
 local processedPlayers = {}
 local BACKDROP = {
   bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
@@ -11,7 +10,22 @@ local BACKDROP = {
 
 local realmName = GetRealmName()
 local playerName = UnitName("player")
+local localPlayerGuild = GetGuildInfo("player")
 local ROGUE_COLOR = {r = 1, g = 0.96, b = 0.41}
+
+-- Helper Functions
+local function addToRankings(entry)
+  if type(entry) ~= "table" then
+      return
+  end
+  if type(entry.player) ~= "string" then
+      return
+  end
+  if type(entry.total) ~= "number" then
+      return
+  end
+  table.insert(rankings, entry)
+end
 
 local RankingsUI = CreateFrame("Frame", "PocketMoneyRankingsFrame", UIParent, "BackdropTemplate")
 RankingsUI:SetSize(325, 400)
@@ -76,7 +90,7 @@ PocketMoneyRankings.ToggleUI = function()
 end
 
 PocketMoneyRankings.UpdateUI = function()
-  -- Get most up todate values
+
   PocketMoneyRankings.RequestLatestData()
   
   if not PocketMoneyDB or not PocketMoneyDB[realmName] then return end
@@ -86,8 +100,8 @@ PocketMoneyRankings.UpdateUI = function()
     child:SetParent(nil)
   end
 
-  local rankings = {}
-  local processedPlayers = {}
+  processedPlayers = {}
+  rankings = {}  
   titleText:SetText("Guild Pickpocket Rankings")
 
   -- Let's start with our own rogues!
@@ -103,8 +117,8 @@ PocketMoneyRankings.UpdateUI = function()
     local total = (myData.lifetimeGold or 0) + (myData.lifetimeJunk or 0) + (myData.lifetimeBoxValue or 0)
     
     -- Add alt totals if this is a main character with alts
-    local altsBreakdown = {}
     if myData.main and myData.Alts then
+      local altsBreakdown = {}
       for altName, altData in pairs(myData.Alts) do
         local altTotal = (altData.lifetimeGold or 0) + (altData.lifetimeJunk or 0) + (altData.lifetimeBoxValue or 0)
         total = total + altTotal
@@ -114,19 +128,30 @@ PocketMoneyRankings.UpdateUI = function()
           junk = altData.lifetimeJunk or 0,
           boxValue = altData.lifetimeBoxValue or 0
         })
+        processedPlayers[altName] = true
       end
+      local mainTotal = total
+      addToRankings({
+          player = playerName,
+          total = mainTotal,
+          gold = myData.lifetimeGold or 0,
+          junk = myData.lifetimeJunk or 0,
+          boxValue = myData.lifetimeBoxValue or 0,
+          alts = altsBreakdown
+      })
+      processedPlayers[playerName] = true
+    else
+      local mainTotal = total
+      addToRankings({
+          player = playerName,
+          total = mainTotal,
+          gold = myData.lifetimeGold or 0,
+          junk = myData.lifetimeJunk or 0,
+          boxValue = myData.lifetimeBoxValue or 0,
+          alts = {}
+      })
+      processedPlayers[playerName] = true
     end
-
-    local mainTotal = total
-    table.insert(rankings, {
-        player = playerName,
-        total = mainTotal,
-        gold = myData.lifetimeGold or 0,
-        junk = myData.lifetimeJunk or 0,
-        boxValue = myData.lifetimeBoxValue or 0,
-        alts = altsBreakdown
-    })
-    processedPlayers[playerName] = true
   end
 
   -- Update rankings for all rogues
@@ -134,32 +159,40 @@ PocketMoneyRankings.UpdateUI = function()
     titleText:SetText("Server Pickpocket Rankings")
     for rogueName, rogueData in pairs(PocketMoneyDB[realmName].knownRogues) do
       local total = (rogueData.gold or 0) + (rogueData.junk or 0) + (rogueData.boxValue or 0)
-      if total > 0 and not processedPlayers[rogueName] then
-        local altTotal = 0
-        local altsBreakdown = {}
-        if rogueData.Alt then
-          for _, altName in ipairs(rogueData.Alts) do
-            local altData = PocketMoneyDB[realmName].knownRogues[altName] or {}
-            local altTotalValue = (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
-            altTotal = altTotal + altTotalValue
-            table.insert(altsBreakdown, {
-              alt = altName,
-              gold = altData.gold or 0,
-              junk = altData.junk or 0,
-              boxValue = altData.boxValue or 0
-            })
-            processedPlayers[altName] = true
-          end
+      if rogueData.main and rogueData.Alts then
+        local altsBreakdown = {}  -- Move this declaration inside the loop
+        for altName, altData in pairs(rogueData.Alts) do
+          local altTotalValue = (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
+          total = total + altTotalValue
+          
+          table.insert(altsBreakdown, {
+            alt = altName,
+            gold = altData.gold or 0,
+            junk = altData.junk or 0,
+            boxValue = altData.boxValue or 0
+          })
+          processedPlayers[altName] = true
         end
-
-        local mainTotal = total + altTotal
-        table.insert(rankings, {
+  
+        if total > 0 and not processedPlayers[rogueName] then
+          addToRankings({
+            player = rogueName,
+            total = total,
+            gold = rogueData.gold or 0,
+            junk = rogueData.junk or 0,
+            boxValue = rogueData.boxValue or 0,
+            alts = altsBreakdown
+          })
+          processedPlayers[rogueName] = true
+        end
+      elseif total > 0 and not processedPlayers[rogueName] then
+        addToRankings({
           player = rogueName,
-          total = mainTotal,
+          total = total,
           gold = rogueData.gold or 0,
           junk = rogueData.junk or 0,
           boxValue = rogueData.boxValue or 0,
-          alts = altsBreakdown
+          alts = {}
         })
         processedPlayers[rogueName] = true
       end
@@ -169,33 +202,39 @@ PocketMoneyRankings.UpdateUI = function()
       if localPlayerGuild then
         if rogueData.Guild == localPlayerGuild then
           local total = (rogueData.gold or 0) + (rogueData.junk or 0) + (rogueData.boxValue or 0)
-          if total > 0 and not processedPlayers[rogueName] then
-            local altTotal = 0
+          if rogueData.main and rogueData.Alts then
             local altsBreakdown = {}
-    
-            if rogueData.Alts then
-              for _, altName in ipairs(rogueData.Alts) do
-                local altData = PocketMoneyDB[realmName].knownRogues[altName] or {}
-                local altTotalValue = (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
-                altTotal = altTotal + altTotalValue
-                table.insert(altsBreakdown, {
-                  alt = altName,
-                  gold = altData.gold or 0,
-                  junk = altData.junk or 0,
-                  boxValue = altData.boxValue or 0
-                })
-                processedPlayers[altName] = true
-              end
+            for altName, altData in pairs(rogueData.Alts) do
+              local altTotalValue = (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
+              total = total + altTotalValue
+              
+              table.insert(altsBreakdown, {
+                alt = altName,
+                gold = altData.gold or 0,
+                junk = altData.junk or 0,
+                boxValue = altData.boxValue or 0
+              })
+              processedPlayers[altName] = true
             end
-    
-            local mainTotal = total + altTotal
-            table.insert(rankings, {
+            if total > 0 and not processedPlayers[rogueName] then
+              addToRankings({
+                player = rogueName,
+                total = total,
+                gold = rogueData.gold or 0,
+                junk = rogueData.junk or 0,
+                boxValue = rogueData.boxValue or 0,
+                alts = altsBreakdown
+              })
+              processedPlayers[rogueName] = true
+            end
+          elseif total > 0 and not processedPlayers[rogueName] then
+            addToRankings({
               player = rogueName,
-              total = mainTotal,
+              total = total,
               gold = rogueData.gold or 0,
               junk = rogueData.junk or 0,
               boxValue = rogueData.boxValue or 0,
-              alts = altsBreakdown
+              alts = {}
             })
             processedPlayers[rogueName] = true
           end
@@ -205,8 +244,17 @@ PocketMoneyRankings.UpdateUI = function()
   end
 
   serverCheckbox:SetChecked(PocketMoneyDB.settings and PocketMoneyDB.settings.includeAllRogues or false)
-  table.sort(rankings, function(a, b) return a.total > b.total end)
-  
+
+  table.sort(rankings, function(a, b)
+      if type(a) ~= "table" or type(b) ~= "table" then
+          return false
+      end
+      if type(a.total) ~= "number" or type(b.total) ~= "number" then
+          return false
+      end
+      return a.total > b.total
+  end)
+    
   for i, data in ipairs(rankings) do
     local entryFrame = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
     entryFrame:SetSize(260, 20)
