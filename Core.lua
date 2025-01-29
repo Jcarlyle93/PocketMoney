@@ -96,12 +96,14 @@ function  InitializePlayerData()
       PocketMoneyCore.SetAsAlt(playerName)
     end)
   end
-  function PocketMoneyCore.EnsureKnownRogues()
-    if not PocketMoneyDB[realmName].knownRogues then
-      PocketMoneyDB[realmName].knownRogues = {}
-    end
+end
+
+function PocketMoneyCore.EnsureKnownRogues()
+  if not PocketMoneyDB[realmName].knownRogues then
+    PocketMoneyDB[realmName].knownRogues = {}
   end
 end
+
 
 local function UpgradeDatabase()
   if not PocketMoneyDB then
@@ -236,6 +238,7 @@ PocketMoneyCore.IsAltCharacter = function(name)
   if not PocketMoneyDB[realmName].main then
     return false
   end
+  local mainPC = PocketMoneyDB[realmName].main
   if not PocketMoneyDB[realmName][mainPC].Alts then
     PocketMoneyDB[realmName][mainPC].Alts = {}
   end
@@ -623,10 +626,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
           C_Timer.After(0.2, function()
             PocketMoneyWhatsNew.CheckUpdateNotification()
             PocketMoneyCore.initialized = true
-            C_Timer.After(0.2, function()
-              PocketMoneyRankings.RequestLatestData()
-              print("PickPocket loaded Successfully")
-            end)
+            print("PickPocket loaded Successfully")
           end)
         end)
       end)

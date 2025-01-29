@@ -363,9 +363,16 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
+    local simplifiedJoiningPlayer = Ambiguate(playerJoining, "short")
+    local simplifiedLocalPlayer = Ambiguate(localPlayerName, "short")
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       PocketMoneyDB.tempData.onlinePlayers[playerNew] = true
       PocketMoneyRankings.RequestLatestData(playerNew)
+    end
+    if simplifiedJoiningPlayer == simplifiedLocalPlayer and channelName == PocketMoneyCore.CHANNEL_NAME then
+      C_Timer.After(1, function()
+        PocketMoneyRankings.RequestLatestData()
+      end)
     end
   elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
@@ -379,7 +386,7 @@ end)
 local cleanupFrame = CreateFrame("Frame")
 cleanupFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
 cleanupFrame:SetScript("OnEvent", function(self, event)
-  if event == "PLAYER_LEAVING_WORLD" and IsLoggingOut() then
+  if event == "PLAYER_LEAVING_WORLD" then
       PocketMoneyDB.tempData.onlinePlayers = {}
     end
 end)
