@@ -15,6 +15,16 @@ local function getNameWithoutRealm(fullName)
   return fullName:match("([^-]+)")
 end
 
+local function SafeAmbiguate(name)
+  if not name or name == "" then return nil end
+
+  if not name:find("-") then
+    name = name .. "-" .. GetRealmName():gsub("%s+", "")
+  end
+  
+  return Ambiguate(name, "short")
+end
+
 local function AuditKnownRogues(realmName, mainChar, isAltUpdate, messageData)
   -- When handling alt data
   if isAltUpdate then
@@ -77,8 +87,6 @@ function PocketMoneyRankings.SendUpdate(target)
     if target then
       PocketMoneyCore.SendMessage(serialized, target)
     end
-  else
-    print("Data Serialize failed for player: ", target)
   end
 end
 
@@ -148,7 +156,7 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
   local realmName = messageData.realm
   local senderName = messageData.player
   local guildName = messageData.guild
-  if not guildName or guildName == "NoGuild" then
+  if not guildName then
     guildName = PocketMoneyCore.GetPlayerGuild(senderName)
   end
 
@@ -329,8 +337,7 @@ function PocketMoneyRankings.AuditDB()
           end
       end
     end
-end
-
+  end
 print("Old fields removed successfully.")
 end
 
@@ -363,8 +370,8 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
     local _, playerName, _, _, _, _, _, _, channelBaseName = ...
     local playerNew = getNameWithoutRealm(playerName)
-    local simplifiedJoiningPlayer = Ambiguate(playerJoining, "short")
-    local simplifiedLocalPlayer = Ambiguate(localPlayerName, "short")
+    local simplifiedJoiningPlayer = SafeAmbiguate(playerJoining, "short")
+    local simplifiedLocalPlayer = SafeAmbiguate(localPlayerName, "short")
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       PocketMoneyDB.tempData.onlinePlayers[playerNew] = true
       PocketMoneyRankings.RequestLatestData(playerNew)
@@ -383,10 +390,23 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
   end
 end)
 
+local isReloadingUI = false
 local cleanupFrame = CreateFrame("Frame")
+
 cleanupFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
+cleanupFrame:RegisterEvent("ADDON_LOADED")
+
+cleanupFrame:SetScript("OnEvent", function(self, event, addonName)
+    if event == "PLAYER_LEAVING_WORLD" then
+        isReloadingUI = true
+    elseif event == "ADDON_LOADED" and addonName == "PocketMoney" then
+        isReloadingUI = false
+    end
+end)
+
+cleanupFrame:RegisterEvent("PLAYER_LOGOUT")
 cleanupFrame:SetScript("OnEvent", function(self, event)
-  if event == "PLAYER_LEAVING_WORLD" then
-      PocketMoneyDB.tempData.onlinePlayers = {}
+    if event == "PLAYER_LOGOUT" and not isReloadingUI then
+        PocketMoneyDB.tempData.onlinePlayers = {}
     end
 end)
