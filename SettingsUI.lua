@@ -17,7 +17,7 @@ local function GetLocalRogues()
 end
 
 local SettingsUI = CreateFrame("Frame", "PocketMoneySettingsFrame", UIParent, "BackdropTemplate")
-SettingsUI:SetSize(380, 400)
+SettingsUI:SetSize(380, 430)
 SettingsUI:SetPoint("CENTER")
 SettingsUI:SetMovable(true)
 SettingsUI:EnableMouse(true)
@@ -240,9 +240,44 @@ dividerTwo:SetSize(300, 16)
 dividerTwo:SetPoint("TOP", globalFrame, "BOTTOM", 35, -120)
 dividerTwo:SetPoint("CENTER", SettingsUI, "CENTER", 0, dividerTwo:GetTop())
 
+local auditButton = CreateFrame("Button", nil, characterFrame, "UIPanelButtonTemplate")
+auditButton:SetSize(280, 34)
+auditButton:SetPoint("TOPLEFT", dividerTwo, "BOTTOMLEFT", -30, -10)
+auditButton:SetText("Audit Local Characters")
+
+auditButton:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:AddLine("Audit Local Characters")
+  GameTooltip:AddLine("Cleans up character data by removing non-rogues and fixing alt relationships.", 1, 1, 1, true)
+  GameTooltip:AddLine("Use with caution!", 1, 0.1, 0.1)
+  GameTooltip:Show()
+end)
+auditButton:SetScript("OnLeave", function(self)
+  GameTooltip:Hide()
+end)
+
+auditButton:SetScript("OnClick", function()
+  StaticPopupDialogs["POCKETMONEY_CONFIRM_AUDIT"] = {
+      text = "Are you sure you want to audit local characters?\nThis will remove non-rogues and fix alt relationships.",
+      button1 = "Yes",
+      button2 = "No",
+      OnAccept = function()
+          PocketMoneyCore.AuditLocal()
+          C_Timer.After(0.1, function()
+              pcall(UpdateMainDropdown)
+          end)
+      end,
+      timeout = 0,
+      whileDead = true,
+      hideOnEscape = true,
+      preferredIndex = 3,
+  }
+  StaticPopup_Show("POCKETMONEY_CONFIRM_AUDIT")
+end)
+
 local resetButton = CreateFrame("Button", nil, characterFrame, "UIPanelButtonTemplate")
 resetButton:SetSize(280, 34)
-resetButton:SetPoint("TOPLEFT", dividerTwo, "BOTTOMLEFT", -30, -10)
+resetButton:SetPoint("TOPLEFT", auditButton, "BOTTOMLEFT", 0, -5)
 resetButton:SetText("Reset All Local Pockmoney Data!")
 
 local closeButton = CreateFrame("Button", nil, SettingsUI, "UIPanelCloseButton")

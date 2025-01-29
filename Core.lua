@@ -50,10 +50,12 @@ PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
+if not PocketMoneyDB[realmName].knownRogues then
+  print("Creating knownRogues table for realm: " .. realmName)
+  PocketMoneyDB[realmName].knownRogues = {}
+end
 PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
-PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 PocketMoneyCore.mainPC = PocketMoneyDB[realmName].main or nil
-
 PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or nil
 if PocketMoneyCore.mainPC then
   PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
@@ -72,6 +74,13 @@ if isRogue then
     if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
       PocketMoneyCore.SetAsAlt(playerName)
     end
+  end
+end
+
+function PocketMoneyCore.EnsureKnownRogues()
+  if not PocketMoneyDB[realmName].knownRogues then
+      print("Restoring knownRogues table")
+      PocketMoneyDB[realmName].knownRogues = {}
   end
 end
 
@@ -119,6 +128,73 @@ local function UpgradeDatabase()
     end
     PocketMoneyDB.dbVersion = CURRENT_DB_VERSION
   end
+end
+
+function PocketMoneyCore.AuditLocal()
+if not PocketMoneyDB or not PocketMoneyDB[realmName] then
+    print("PocketMoneyDB not initialized or realm data missing.")
+    return
+end
+
+local charsToRemove = {}
+
+for charName, charData in pairs(PocketMoneyDB[realmName]) do
+  -- Skip non-character entries
+  if type(charData) == "table" and 
+          charName ~= "main" and 
+          charName ~= "tempData" and 
+          charName ~= "settings" and 
+          charName ~= "knownRogues" then
+          
+    -- Delete non-rogues
+    if charData.class ~= "ROGUE" then
+        print("Removing non-rogue character: " .. charName)
+        table.insert(charsToRemove, charName)
+        
+    -- Handle alts
+    elseif charData.AltOf then
+      local mainChar = charData.AltOf
+      if PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
+        if PocketMoneyDB[realmName][mainChar].Alts[charName] then
+          print("Removing duplicate alt: " .. charName)
+          table.insert(charsToRemove, charName)
+        else
+          print("Moving alt " .. charName .. " to main's Alts table: " .. mainChar)
+          PocketMoneyDB[realmName][mainChar].Alts[charName] = charData
+          table.insert(charsToRemove, charName)
+        end
+      else
+        print("Removing orphaned alt: " .. charName)
+        table.insert(charsToRemove, charName)
+      end
+    end
+  end
+end
+
+-- Remove characters from the main database
+for _, charName in ipairs(charsToRemove) do
+    PocketMoneyDB[realmName][charName] = nil
+end
+
+-- Audit main character's Alts table
+local mainChar = PocketMoneyDB[realmName].main
+if mainChar and PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
+    local altsToRemove = {}
+    for altName, altData in pairs(PocketMoneyDB[realmName][mainChar].Alts) do
+        -- Check if the alt is a rogue
+        if altData.class ~= "ROGUE" then
+            print("Removing non-rogue alt: " .. altName)
+            table.insert(altsToRemove, altName)
+        end
+    end
+    
+    -- Remove non-rogue alts
+    for _, altName in ipairs(altsToRemove) do
+        PocketMoneyDB[realmName][mainChar].Alts[altName] = nil
+    end
+end
+
+print("AuditLocal completed. Database cleaned up.")
 end
 
 -- Helper Functions
@@ -671,6 +747,21 @@ SlashCmdList["POCKETMONEY"] = function(msg)
     return
   elseif msg == "audit" then
     PocketMoneyRankings.AuditDB()
+    return
+  elseif msg == "auditlocal" then
+    StaticPopupDialogs["POCKETMONEY_CONFIRM_AUDIT"] = {
+        text = "Are you sure you want to audit local characters?\nThis will remove non-rogues and fix alt relationships.",
+        button1 = "Yes",
+        button2 = "No",
+        OnAccept = function()
+            PocketMoneyCore.AuditLocal()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+    StaticPopup_Show("POCKETMONEY_CONFIRM_AUDIT")
     return
   end
   if not isRogue then
