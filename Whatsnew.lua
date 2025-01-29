@@ -1,9 +1,9 @@
-ADDON_VERSION = "1.9.4"
+ADDON_VERSION = "1.9.5"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.9.4"] = [[
+  ["1.9.5"] = [[
 Pocket Money Updated to Version 1.9.X:
 
 Features:

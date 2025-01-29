@@ -3,16 +3,17 @@
 ## Notes: Tracks gold made from pickpocketing
 ## Author: Worlds best rogue Indelible@Discord
 ## SavedVariables: PocketMoneyDB, PocketMoneyPopoutPosition
-## Version: 1.9.4
+## Version: 1.9.5
 ## X-Credits: LibSerialize by Ross Nichols
 
 # Libraries
 Libs\LibDBIcon-1.0\LibStub\LibStub.lua
+Libs\LibDBIcon-1.0\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\LibDBIcon-1.0\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0\LibDBIcon-1.0.lua
-Libs\LibSerialize\LibSerialize.lua
 Libs\ChatThrottleLib\ChatThrottleLib.lua
 Libs\LibDeflate\LibDeflate.lua
+Libs\LibSerialize\LibSerialize.lua
 
 # Core files
 Core.lua

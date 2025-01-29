@@ -60,34 +60,42 @@ if PocketMoneyCore.mainPC then
   PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
 end
 
+function InitializeNewServer()
+ if not PocketMoneyDB[realmName] then
+  PocketMoneyDB[realmName] = {
+    knownRogues = {}
+  }
+ end
+end
 
 function  InitializePlayerData()
-  if isRogue then
-    if PocketMoneyDB[realmName].main and 
-      PocketMoneyDB[realmName][PocketMoneyCore.mainPC] then
-        PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts or {}
+  if not isRogue then return end
+  InitializeNewServer()
+  if PocketMoneyDB and PocketMoneyDB[realmName] then
+    if PocketMoneyDB[realmName].main then
+      if PocketMoneyDB[realmName][PocketMoneyCore.mainPC] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts then
         if PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] then
-          return
+        return
         end
+      end
     end
-    if PocketMoneyDB[realmName][playerName] == nil then
-        PocketMoneyDB[realmName][playerName] = {
-            lifetimeGold = 0,
-            lifetimeJunk = 0,
-            lifetimeBoxValue = 0,
-            Guild = PocketMoneyCore.GetCharacterGuild(playerName),
-            checksum = nil,
-            class = playerClass,
-            Alts = {}
-        }
-        if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
-            C_Timer.After(0.1, function()
-                PocketMoneyCore.SetAsAlt(playerName)
-            end)
-        end
+    if PocketMoneyDB[realmName][playerName] then
+      return
     end
   end
-
+  PocketMoneyDB[realmName][playerName] = {
+    lifetimeGold = 0,
+    lifetimeJunk = 0,
+    lifetimeBoxValue = 0,
+    checksum = nil,
+    class = playerClass,
+    Alts = {}
+  }
+  if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
+    C_Timer.After(0.1, function()
+      PocketMoneyCore.SetAsAlt(playerName)
+    end)
+  end
   function PocketMoneyCore.EnsureKnownRogues()
     if not PocketMoneyDB[realmName].knownRogues then
       PocketMoneyDB[realmName].knownRogues = {}
@@ -225,8 +233,7 @@ function PocketMoneyCore.SendMessage(message, target)
 end
 
 PocketMoneyCore.IsAltCharacter = function(name)
-  local mainPC = PocketMoneyDB[realmName].main
-  if not mainPC or not PocketMoneyDB[realmName][mainPC] then
+  if not PocketMoneyDB[realmName].main then
     return false
   end
   if not PocketMoneyDB[realmName][mainPC].Alts then
@@ -609,7 +616,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     local addonName = ...
     C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
     if addonName == "PocketMoney" then
-      C_Timer.After(0.2, function()
+      C_Timer.After(0.3, function()
         InitializePlayerData()
         C_Timer.After(0.2, function()
           UpgradeDatabase()

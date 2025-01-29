@@ -18,6 +18,7 @@ local function CreatePopoutFrame()
   PopUI:SetScript("OnShow", function()
     PocketMoneyDB.popoutWasVisible = true
   end)
+  PopUI:Hide()
   
   -- Backdrop styling
   PopUI:SetBackdrop({
