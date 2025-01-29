@@ -48,7 +48,7 @@ end
 function PocketMoneyRankings.SendUpdate(target)
   local currentMain = PocketMoneyDB[realmName].main
   local dbLocation
-
+  local guildName = PocketMoneyCore.GetPlayerGuild(playerName)
   if PocketMoneyCore.IsAltCharacter(playerName) then
     dbLocation = PocketMoneyDB[realmName][currentMain].Alts[playerName]
   else
@@ -62,6 +62,7 @@ function PocketMoneyRankings.SendUpdate(target)
     gold = dbLocation.lifetimeGold or 0,
     junk = dbLocation.lifetimeJunk or 0,
     boxValue = dbLocation.lifetimeBoxValue or 0,
+    guild = guildName,
     timestamp = GetServerTime(),
     main = dbLocation.main or false,
     AltOf = PocketMoneyCore.IsAltCharacter(playerName) and currentMain or nil,
@@ -106,7 +107,6 @@ function PocketMoneyRankings.RequestLatestData(targetPlayer)
     else
       for player in pairs(onlinePlayers) do
         if lastRequestTime[player] and (now - lastRequestTime[player]) > 60 then
-          print("Sent Rquest to: ", player)
           PocketMoneyCore.SendMessage(serialized, player)
           lastRequestTime[player] = now
         end
@@ -148,7 +148,6 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
 
   local realmName = messageData.realm
   local senderName = messageData.player
-  local guildName = PocketMoneyCore.GetCharacterGuild(senderName)
 
   PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
   PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
@@ -157,6 +156,8 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
     if not PocketMoneyDB[realmName].knownRogues[senderName] then
       PocketMoneyDB[realmName].knownRogues[senderName] = {}
     end
+
+    local guildName = messageData.Guild or PocketMoneyCore.GetPlayerGuild(senderName)
 
     PocketMoneyDB[realmName].knownRogues[senderName] = {
       gold = messageData.gold,
@@ -176,6 +177,7 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
         main = true
       }
     end
+    local guildName = messageData.Guild or PocketMoneyCore.GetPlayerGuild(senderName)
     PocketMoneyDB[realmName].knownRogues[mainChar].Alts = PocketMoneyDB[realmName].knownRogues[mainChar].Alts or {}
     PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {
       gold = messageData.gold,
