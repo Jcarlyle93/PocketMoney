@@ -1,5 +1,5 @@
 PocketMoneyRankings = PocketMoneyRankings or {}
-local onlinePlayers = PocketMoneyDB.tempData.onlinePlayers
+PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 local lastRequestTime = {}
 local ADDON_PREFIX = "PMRank"
 local hasRequestedInitialData = false
@@ -105,7 +105,7 @@ function PocketMoneyRankings.RequestLatestData(targetPlayer)
       PocketMoneyCore.SendMessage(serialized, targetPlayer)
       lastRequestTime[targetPlayer] = now
     else
-      for player in pairs(onlinePlayers) do
+      for player in pairs(PocketMoneyDB.tempData.onlinePlayers) do
         if lastRequestTime[player] and (now - lastRequestTime[player]) > 60 then
           PocketMoneyCore.SendMessage(serialized, player)
           lastRequestTime[player] = now
@@ -117,7 +117,6 @@ end
 
 -- Recieve Data
 function PocketMoneyRankings.ProcessUpdate(sender, messageData)
-  
   if not messageData or type(messageData) ~= "table" then
     return
   end
@@ -152,12 +151,15 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
   PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
   PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
+  local guildName = messageData.guild
+  if not guildName or guildName == "NoGuild" then
+    guildName = PocketMoneyCore.GetPlayerGuild(senderName)
+  end
+
   if not messageData.AltOf then
     if not PocketMoneyDB[realmName].knownRogues[senderName] then
       PocketMoneyDB[realmName].knownRogues[senderName] = {}
     end
-
-    local guildName = messageData.Guild or PocketMoneyCore.GetPlayerGuild(senderName)
 
     PocketMoneyDB[realmName].knownRogues[senderName] = {
       gold = messageData.gold,
@@ -177,7 +179,6 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
         main = true
       }
     end
-    local guildName = messageData.Guild or PocketMoneyCore.GetPlayerGuild(senderName)
     PocketMoneyDB[realmName].knownRogues[mainChar].Alts = PocketMoneyDB[realmName].knownRogues[mainChar].Alts or {}
     PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {
       gold = messageData.gold,
@@ -374,9 +375,9 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 local cleanupFrame = CreateFrame("Frame")
-cleanupFrame:RegisterEvent("PLAYER_LOGOUT")
+cleanupFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
 cleanupFrame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_LOGOUT" then
+  if event == "PLAYER_LEAVING_WORLD" and IsLoggingOut() then
       PocketMoneyDB.tempData.onlinePlayers = {}
     end
 end)

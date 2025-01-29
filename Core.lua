@@ -48,7 +48,6 @@ PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
 PocketMoneyDB.UsePopoutDisplay  = PocketMoneyDB.UsePopoutDisplay or false
 PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
-PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
 PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
@@ -154,7 +153,7 @@ PocketMoneyCore.GetPlayerGuild = function(playerName)
     local name = playerName:match("([^-]+)")
     guildName = GetGuildInfo(name)
   end
-  return guildName or "NoGuild"
+  return guildName or nil
 end
 
 local function updateChecksum(targetCharacter, altCharacter)
@@ -525,6 +524,9 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
       print("PickPocket loaded")
       UpgradeDatabase()
       PocketMoneyWhatsNew.CheckUpdateNotification()
+      C_Timer.After(5, function()
+        PocketMoneyRankings.RequestLatestData()
+      end)
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
     local unit, castGUID, spellID = ...
