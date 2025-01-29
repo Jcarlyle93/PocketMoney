@@ -1,5 +1,4 @@
 PocketMoneyRankings = PocketMoneyRankings or {}
-PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 local lastRequestTime = {}
 local ADDON_PREFIX = "PMRank"
 local hasRequestedInitialData = false
@@ -66,7 +65,8 @@ function PocketMoneyRankings.SendUpdate(target)
     timestamp = GetServerTime(),
     main = dbLocation.main or false,
     AltOf = PocketMoneyCore.IsAltCharacter(playerName) and currentMain or nil,
-    Alts = not PocketMoneyCore.IsAltCharacter(playerName) and (dbLocation.Alts or {}) or nil
+    Alts = not PocketMoneyCore.IsAltCharacter(playerName) and (dbLocation.Alts or {}) or nil,
+    Vers = PocketMoneyDB.lastSeenVersion
   }
  
   local LibSerialize = LibStub("LibSerialize")
@@ -147,14 +147,13 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
 
   local realmName = messageData.realm
   local senderName = messageData.player
-
-  PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-  PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
-
   local guildName = messageData.guild
   if not guildName or guildName == "NoGuild" then
     guildName = PocketMoneyCore.GetPlayerGuild(senderName)
   end
+
+  PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
+  PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 
   if not messageData.AltOf then
     if not PocketMoneyDB[realmName].knownRogues[senderName] then
@@ -169,7 +168,8 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
       lastSeen = GetServerTime(),
       Guild = guildName,
       main = messageData.main,
-      Alts = messageData.Alts or {}
+      Alts = messageData.Alts or {},
+      Vers = messageData.Vers
     }
   else
     local mainChar = messageData.AltOf
@@ -187,7 +187,8 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
       timestamp = messageData.timestamp,
       lastSeen = GetServerTime(),
       Guild = guildName,
-      AltOf = messageData.AltOf
+      AltOf = messageData.AltOf,
+      Vers = messageData.Vers
     }
   end
   if messageData.AltOf then
@@ -277,7 +278,8 @@ function PocketMoneyRankings.AuditDB()
             lifetimeGold = charData.lifetimeGold,
             lifetimeBoxValue = charData.lifetimeBoxValue,
             class = charData.class,
-            Main = false
+            Main = false,
+            Vers = charName.Vers
           }
         end
       end

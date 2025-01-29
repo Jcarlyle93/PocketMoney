@@ -3,7 +3,7 @@ local ADDON_PREFIX = "PMRank"
 local PocketMoney = CreateFrame("Frame")
 local CTL = _G.ChatThrottleLib
 
--- Variable Initialisation 
+-- Local Vars
 local pendingLootSlots = {}
 local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
@@ -29,6 +29,7 @@ local PICKPOCKET_LOCKBOXES = {
 sessionGold = 0
 sessionJunk = 0
 sessionBoxValue = 0
+PocketMoneyCore.initialized = false
 
 -- Get Player Details
 local realmName = GetRealmName()
@@ -41,19 +42,17 @@ function PocketMoneyCore.GetCharacterGuild(Name)
 end
 
 -- Database Initialisation
-local CURRENT_DB_VERSION = 2.0
+local CURRENT_DB_VERSION = 2.2
 
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
 PocketMoneyDB.UsePopoutDisplay  = PocketMoneyDB.UsePopoutDisplay or false
 PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
+PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-if not PocketMoneyDB[realmName].knownRogues then
-  print("Creating knownRogues table for realm: " .. realmName)
-  PocketMoneyDB[realmName].knownRogues = {}
-end
+PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
 PocketMoneyDB[realmName].main = PocketMoneyDB[realmName].main or nil
 PocketMoneyCore.mainPC = PocketMoneyDB[realmName].main or nil
 PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or nil
@@ -61,26 +60,38 @@ if PocketMoneyCore.mainPC then
   PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
 end
 
-if isRogue then
-  if PocketMoneyDB[realmName][playerName] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] == nil then
-    PocketMoneyDB[realmName][playerName] = PocketMoneyDB[realmName][playerName] or {
-      lifetimeGold = 0,
-      lifetimeJunk = 0,
-      lifetimeBoxValue = 0,
-      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
-      checksum = nil,
-      class = playerClass
-    }
-    if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
-      PocketMoneyCore.SetAsAlt(playerName)
+
+function  InitializePlayerData()
+  if isRogue then
+    if PocketMoneyDB[realmName].main and 
+      PocketMoneyDB[realmName][PocketMoneyCore.mainPC] then
+        PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts or {}
+        if PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] then
+          return
+        end
+    end
+    if PocketMoneyDB[realmName][playerName] == nil then
+        PocketMoneyDB[realmName][playerName] = {
+            lifetimeGold = 0,
+            lifetimeJunk = 0,
+            lifetimeBoxValue = 0,
+            Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+            checksum = nil,
+            class = playerClass,
+            Alts = {}
+        }
+        if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
+            C_Timer.After(0.1, function()
+                PocketMoneyCore.SetAsAlt(playerName)
+            end)
+        end
     end
   end
-end
 
-function PocketMoneyCore.EnsureKnownRogues()
-  if not PocketMoneyDB[realmName].knownRogues then
-      print("Restoring knownRogues table")
+  function PocketMoneyCore.EnsureKnownRogues()
+    if not PocketMoneyDB[realmName].knownRogues then
       PocketMoneyDB[realmName].knownRogues = {}
+    end
   end
 end
 
@@ -112,6 +123,7 @@ local function UpgradeDatabase()
       AltOf = nil,
       checksum = nil,
       class = playerClass,
+      Vers = ADDON_VERSION
     }
 
     -- Remove fields not in the schema
@@ -597,11 +609,19 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     local addonName = ...
     C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
     if addonName == "PocketMoney" then
-      print("PickPocket loaded")
-      UpgradeDatabase()
-      PocketMoneyWhatsNew.CheckUpdateNotification()
-      C_Timer.After(5, function()
-        PocketMoneyRankings.RequestLatestData()
+      C_Timer.After(0.2, function()
+        InitializePlayerData()
+        C_Timer.After(0.2, function()
+          UpgradeDatabase()
+          C_Timer.After(0.2, function()
+            PocketMoneyWhatsNew.CheckUpdateNotification()
+            PocketMoneyCore.initialized = true
+            C_Timer.After(0.2, function()
+              PocketMoneyRankings.RequestLatestData()
+              print("PickPocket loaded Successfully")
+            end)
+          end)
+        end)
       end)
     end
   elseif event == "UNIT_SPELLCAST_SUCCEEDED" then

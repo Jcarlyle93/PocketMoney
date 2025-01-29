@@ -14,7 +14,10 @@ local function CreatePopoutFrame()
     if not PocketMoneyDB then PocketMoneyDB = {} end
     local point, relativeTo, relativePoint, xOfs, yOfs = self:GetPoint()
     PocketMoneyDB.popoutPosition = { point, "UIParent", relativePoint, xOfs, yOfs }
-end)
+  end)
+  PopUI:SetScript("OnShow", function()
+    PocketMoneyDB.popoutWasVisible = true
+  end)
   
   -- Backdrop styling
   PopUI:SetBackdrop({
@@ -78,16 +81,27 @@ end)
   PopUI.junkSession = junkSession
   PopUI.boxValueSession = boxValueSession
 
-  if PocketMoneyDB and PocketMoneyDB.popoutPosition then
-    local position = PocketMoneyDB.popoutPosition
-    PopUI:ClearAllPoints()
-    PopUI:SetPoint(unpack(position))
-  else
-    PopUI:SetPoint("CENTER")
-  end
+  C_Timer.After(0.5, function()
+    if PocketMoneyDB and PocketMoneyDB.popoutPosition then
+      local position = PocketMoneyDB.popoutPosition
+      PopUI:ClearAllPoints()
+      PopUI:SetPoint(unpack(position))
+    else
+      PopUI:SetPoint("CENTER")
+    end
+    if PocketMoneyDB.popoutWasVisible then
+      PopUI:Show()
+    else
+      PopUI:Hide()
+    end
+  end)
 
   tinsert(UISpecialFrames, "PocketMoneyPopoutFrame")
+
   PopUI:Hide()
+  PopUI:SetScript("OnHide", function()
+    PocketMoneyDB.popoutWasVisible = false
+  end)
   return PopUI
 end
 
