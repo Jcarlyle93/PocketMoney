@@ -148,6 +148,15 @@ PocketMoneyCore.IsAltCharacter = function(name)
   return PocketMoneyDB[realmName][mainPC].Alts[name] ~= nil
 end
 
+PocketMoneyCore.GetPlayerGuild = function(playerName)
+  local guildName
+  if playerName then
+    local name = playerName:match("([^-]+)")
+    guildName = GetGuildInfo(name)
+  end
+  return guildName or "NoGuild"
+end
+
 local function updateChecksum(targetCharacter, altCharacter)
   if altCharacter then
     local gold = PocketMoneyDB[realmName][targetCharacter].Alts[altCharacter].lifetimeGold or 0
@@ -160,6 +169,24 @@ local function updateChecksum(targetCharacter, altCharacter)
     )
   end
 end
+
+local function FilterChannelMessages(_, event, ...)
+  if event == "CHAT_MSG_CHANNEL_NOTICE" or event == "CHAT_MSG_CHANNEL_NOTICE_USER" then
+    local channelType = select(4, ...)
+    if channelType == PocketMoneyCore.CHANNEL_NAME then
+      return true
+    end
+  end
+  if event == "CHAT_MSG_SYSTEM" then
+    local message = ...
+    if message and message:find(PocketMoneyCore.CHANNEL_NAME) then
+      return true
+    end
+  end
+  return false
+end
+ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE", FilterChannelMessages)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE_USER", FilterChannelMessages)
 
 -- Managing Alts
 function PocketMoneyCore.SetAsAlt(characterName)
@@ -284,9 +311,31 @@ PocketMoneyCore.attemptChannelJoin = function()
     LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
     C_Timer.After(5, function()
       JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
+      local id = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      if id > 0 then
+        ChatFrame_RemoveChannel(DEFAULT_CHAT_FRAME, PocketMoneyCore.CHANNEL_NAME)
+        for i=1, NUM_CHAT_WINDOWS do
+          local frame = _G["ChatFrame"..i]
+          if frame then
+            ChatFrame_RemoveChannel(frame, PocketMoneyCore.CHANNEL_NAME)
+          end
+        end
+      end
     end)
   else
     JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
+    C_Timer.After(0.5, function()
+      local id = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
+      if id > 0 then
+        ChatFrame_RemoveChannel(DEFAULT_CHAT_FRAME, PocketMoneyCore.CHANNEL_NAME)
+        for i=1, NUM_CHAT_WINDOWS do
+          local frame = _G["ChatFrame"..i]
+          if frame then
+            ChatFrame_RemoveChannel(frame, PocketMoneyCore.CHANNEL_NAME)
+          end
+        end
+      end
+    end)
   end
 
   joinTimer = C_Timer.NewTimer(10, function()

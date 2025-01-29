@@ -108,7 +108,7 @@ setMainButton:SetScript("OnClick", function()
     if success then
       if playerName == selectedName then
         setAltCheckbox:Disable()
-        setAltLabel:SetText("Cannot set main character as alt")
+        setAltLabel:SetText("Set as Alt Character (Cannot set main character as alt)")
       else
         setAltCheckbox:Enable()
         setAltLabel:SetText("Set as Alt Character")
@@ -231,7 +231,7 @@ end)
 
 if playerName == PocketMoneyDB[realmName].main then
   setAltCheckbox:Disable()
-  setAltLabel:SetText("Cannot set main character as alt")
+  setAltLabel:SetText("Set as alt (Cannot set main character as alt)")
 end
 
 local dividerTwo = SettingsUI:CreateTexture(nil, "ARTWORK")
@@ -263,7 +263,7 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
     end)
     if PocketMoneyDB[realmName] and PocketMoneyDB[realmName].main and playerName == PocketMoneyDB[realmName].main then
       setAltCheckbox:Disable()
-      setAltLabel:SetText("Cannot set main character as alt")
+      setAltLabel:SetText("Set as alt (Cannot set main character as alt)")
     end
   end
 end)
