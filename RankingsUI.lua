@@ -81,6 +81,7 @@ local contentFrame = scrollChild
 tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
 
 PocketMoneyRankings.ToggleUI = function()
+  PocketMoneyCore.EnsureKnownRogues()
   if RankingsUI:IsShown() then
     RankingsUI:Hide()
   else
