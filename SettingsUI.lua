@@ -16,6 +16,16 @@ local function GetLocalRogues()
   return rogues
 end
 
+local function UpdateCheckboxVisuals(checkbox, enabled)
+  local normalTexture = checkbox:GetNormalTexture()
+  local pushedTexture = checkbox:GetPushedTexture()
+  local disabledTexture = checkbox:GetDisabledTexture()
+  
+  if normalTexture then normalTexture:SetDesaturated(not enabled) end
+  if pushedTexture then pushedTexture:SetDesaturated(not enabled) end
+  if disabledTexture then disabledTexture:SetDesaturated(not enabled) end
+end
+
 local SettingsUI = CreateFrame("Frame", "PocketMoneySettingsFrame", UIParent, "BackdropTemplate")
 SettingsUI:SetSize(380, 430)
 SettingsUI:SetPoint("CENTER")
@@ -298,7 +308,12 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
     end)
     if PocketMoneyDB[realmName] and PocketMoneyDB[realmName].main and playerName == PocketMoneyDB[realmName].main then
       setAltCheckbox:Disable()
-      setAltLabel:SetText("Set as alt (Cannot set main character as alt)")
+      UpdateCheckboxVisuals(setAltCheckbox, false)
+      setAltLabel:SetText("Cannot set main character as alt")
+    else
+      setAltCheckbox:Enable()
+      UpdateCheckboxVisuals(setAltCheckbox, true)
+      setAltLabel:SetText("Set as alt")
     end
   end
 end)

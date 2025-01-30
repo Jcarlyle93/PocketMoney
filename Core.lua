@@ -1,9 +1,20 @@
+-- Global Vars
 PocketMoneyCore = {}
-local ADDON_PREFIX = "PMRank"
-local PocketMoney = CreateFrame("Frame")
-local CTL = _G.ChatThrottleLib
+ADDON_PREFIX = "PMRank"
+sessionGold = 0
+sessionJunk = 0
+sessionBoxValue = 0
+
+-- Get Player Details
+realmName = GetRealmName()
+playerName = UnitName("player")
+_, playerClass = UnitClass("player")
+isRogue = playerClass == "ROGUE"
+localPlayerGuild = GetGuildInfo("player")
 
 -- Local Vars
+local PocketMoney = CreateFrame("Frame")
+local CTL = _G.ChatThrottleLib
 local pendingLootSlots = {}
 local MAX_JOIN_ATTEMPTS = 3
 local joinAttempts = 0
@@ -25,22 +36,6 @@ local PICKPOCKET_LOCKBOXES = {
   [16883] = "Worn Junkbox"
 }
 
--- Global Vars
-sessionGold = 0
-sessionJunk = 0
-sessionBoxValue = 0
-PocketMoneyCore.initialized = false
-
--- Get Player Details
-local realmName = GetRealmName()
-local playerName = UnitName("player")
-local _, playerClass = UnitClass("player")
-local isRogue = playerClass == "ROGUE"
-function PocketMoneyCore.GetCharacterGuild(Name)
-  local guildName = GetGuildInfo(Name)
-  return guildName or "NoGuild"
-end
-
 -- Database Initialisation
 local CURRENT_DB_VERSION = 2.2
 
@@ -49,6 +44,8 @@ PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
 PocketMoneyDB.UsePopoutDisplay  = PocketMoneyDB.UsePopoutDisplay or false
 PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
+PocketMoneyDB.settings = PocketMoneyDB.settings or {}
+PocketMoneyDB.settings.includeAllRogues = PocketMoneyDB.settings.includeAllRogues or true
 PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
 PocketMoneyDB.dbVersion = PocketMoneyDB.dbVersion or CURRENT_DB_VERSION
 PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
@@ -98,13 +95,6 @@ function  InitializePlayerData()
   end
 end
 
-function PocketMoneyCore.EnsureKnownRogues()
-  if not PocketMoneyDB[realmName].knownRogues then
-    PocketMoneyDB[realmName].knownRogues = {}
-  end
-end
-
-
 local function UpgradeDatabase()
   if not PocketMoneyDB then
     print("Error: Database not initialized")
@@ -128,7 +118,7 @@ local function UpgradeDatabase()
       lifetimeGold = 0,
       lifetimeJunk = 0,
       lifetimeBoxValue = 0,
-      Guild = PocketMoneyCore.GetCharacterGuild(playerName),
+      Guild = localPlayerGuild,
       main = false,
       AltOf = nil,
       checksum = nil,
@@ -153,70 +143,70 @@ local function UpgradeDatabase()
 end
 
 function PocketMoneyCore.AuditLocal()
-if not PocketMoneyDB or not PocketMoneyDB[realmName] then
-    print("PocketMoneyDB not initialized or realm data missing.")
-    return
-end
+  if not PocketMoneyDB or not PocketMoneyDB[realmName] then
+      print("PocketMoneyDB not initialized or realm data missing.")
+      return
+  end
 
-local charsToRemove = {}
+  local charsToRemove = {}
 
-for charName, charData in pairs(PocketMoneyDB[realmName]) do
-  -- Skip non-character entries
-  if type(charData) == "table" and 
-          charName ~= "main" and 
-          charName ~= "tempData" and 
-          charName ~= "settings" and 
-          charName ~= "knownRogues" then
-          
-    -- Delete non-rogues
-    if charData.class ~= "ROGUE" then
-        print("Removing non-rogue character: " .. charName)
-        table.insert(charsToRemove, charName)
-        
-    -- Handle alts
-    elseif charData.AltOf then
-      local mainChar = charData.AltOf
-      if PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
-        if PocketMoneyDB[realmName][mainChar].Alts[charName] then
-          print("Removing duplicate alt: " .. charName)
+  for charName, charData in pairs(PocketMoneyDB[realmName]) do
+    -- Skip non-character entries
+    if type(charData) == "table" and 
+            charName ~= "main" and 
+            charName ~= "tempData" and 
+            charName ~= "settings" and 
+            charName ~= "knownRogues" then
+            
+      -- Delete non-rogues
+      if charData.class ~= "ROGUE" then
+          print("Removing non-rogue character: " .. charName)
           table.insert(charsToRemove, charName)
+          
+      -- Handle alts
+      elseif charData.AltOf then
+        local mainChar = charData.AltOf
+        if PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
+          if PocketMoneyDB[realmName][mainChar].Alts[charName] then
+            print("Removing duplicate alt: " .. charName)
+            table.insert(charsToRemove, charName)
+          else
+            print("Moving alt " .. charName .. " to main's Alts table: " .. mainChar)
+            PocketMoneyDB[realmName][mainChar].Alts[charName] = charData
+            table.insert(charsToRemove, charName)
+          end
         else
-          print("Moving alt " .. charName .. " to main's Alts table: " .. mainChar)
-          PocketMoneyDB[realmName][mainChar].Alts[charName] = charData
+          print("Removing orphaned alt: " .. charName)
           table.insert(charsToRemove, charName)
         end
-      else
-        print("Removing orphaned alt: " .. charName)
-        table.insert(charsToRemove, charName)
       end
     end
   end
-end
 
--- Remove characters from the main database
-for _, charName in ipairs(charsToRemove) do
-    PocketMoneyDB[realmName][charName] = nil
-end
+  -- Remove characters from the main database
+  for _, charName in ipairs(charsToRemove) do
+      PocketMoneyDB[realmName][charName] = nil
+  end
 
--- Audit main character's Alts table
-local mainChar = PocketMoneyDB[realmName].main
-if mainChar and PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
-    local altsToRemove = {}
-    for altName, altData in pairs(PocketMoneyDB[realmName][mainChar].Alts) do
-        -- Check if the alt is a rogue
-        if altData.class ~= "ROGUE" then
-            print("Removing non-rogue alt: " .. altName)
-            table.insert(altsToRemove, altName)
-        end
-    end
-    
-    -- Remove non-rogue alts
-    for _, altName in ipairs(altsToRemove) do
-        PocketMoneyDB[realmName][mainChar].Alts[altName] = nil
-    end
-end
-
-print("AuditLocal completed. Database cleaned up.")
+  -- Audit main character's Alts table
+  local mainChar = PocketMoneyDB[realmName].main
+  if mainChar and PocketMoneyDB[realmName][mainChar] and PocketMoneyDB[realmName][mainChar].Alts then
+      local altsToRemove = {}
+      for altName, altData in pairs(PocketMoneyDB[realmName][mainChar].Alts) do
+          -- Check if the alt is a rogue
+          if altData.class ~= "ROGUE" then
+              print("Removing non-rogue alt: " .. altName)
+              table.insert(altsToRemove, altName)
+          end
+      end
+      
+      -- Remove non-rogue alts
+      for _, altName in ipairs(altsToRemove) do
+          PocketMoneyDB[realmName][mainChar].Alts[altName] = nil
+      end
+  end
+  PocketMoneyRankings.UpdateUI()
+  print("AuditLocal completed. Database cleaned up.")
 end
 
 -- Helper Functions
@@ -304,6 +294,7 @@ function PocketMoneyCore.SetAsAlt(characterName)
   PocketMoneyDB[realmName][characterName].AltOf = PocketMoneyDB[realmName].main
   PocketMoneyRankings.AuditDB()
   print("Set " .. characterName .. " as alt of " .. PocketMoneyDB[realmName].main)
+  PocketMoneyRankings.UpdateUI()
   return true
 end
 
@@ -327,6 +318,7 @@ function PocketMoneyCore.RemoveAlt(characterName)
   
   PocketMoneyRankings.AuditDB()
   print("Removed " .. characterName .. " as alt")
+  PocketMoneyRankings.UpdateUI()
   return true
 end
 
@@ -617,16 +609,21 @@ PocketMoney:RegisterEvent("CHAT_MSG_SYSTEM")
 PocketMoney:SetScript("OnEvent", function(self, event, ...)
   if event == "ADDON_LOADED" then
     local addonName = ...
-    C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
     if addonName == "PocketMoney" then
+      C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
+      PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
+      PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
+      PocketMoneyDB.tempData.onlinePlayers[playerName] = true
       C_Timer.After(0.3, function()
         InitializePlayerData()
         C_Timer.After(0.2, function()
           UpgradeDatabase()
           C_Timer.After(0.2, function()
             PocketMoneyWhatsNew.CheckUpdateNotification()
-            PocketMoneyCore.initialized = true
-            print("PickPocket loaded Successfully")
+            C_Timer.After(2, function()
+              PocketMoneyRankings.UpdateUI()
+              print("PickPocket loaded Successfully")
+            end)
           end)
         end)
       end)

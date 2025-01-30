@@ -8,9 +8,6 @@ local BACKDROP = {
   insets = { left = 11, right = 12, top = 12, bottom = 11 }
 }
 
-local realmName = GetRealmName()
-local playerName = UnitName("player")
-local localPlayerGuild = GetGuildInfo("player")
 local ROGUE_COLOR = {r = 1, g = 0.96, b = 0.41}
 
 -- Helper Functions
@@ -62,9 +59,7 @@ serverLabel:SetText("Include Non-Guild Rogues")
 
 serverCheckbox:SetScript("OnClick", function(self)
   local checked = self:GetChecked()
-  PocketMoneyDB.settings = PocketMoneyDB.settings or {}
   PocketMoneyDB.settings.includeAllRogues = checked
-  PocketMoneyRankings.RequestLatestData()
   PocketMoneyRankings.UpdateUI()
 end)
 
@@ -81,18 +76,15 @@ local contentFrame = scrollChild
 tinsert(UISpecialFrames, "PocketMoneyRankingsFrame")
 
 PocketMoneyRankings.ToggleUI = function()
-  PocketMoneyCore.EnsureKnownRogues()
   if RankingsUI:IsShown() then
     RankingsUI:Hide()
   else
     RankingsUI:Show()
-    PocketMoneyRankings.UpdateUI()
+    PocketMoneyRankings.RequestLatestData()
   end
 end
 
 PocketMoneyRankings.UpdateUI = function()
-
-  PocketMoneyRankings.RequestLatestData()
   
   if not PocketMoneyDB or not PocketMoneyDB[realmName] then return end
 

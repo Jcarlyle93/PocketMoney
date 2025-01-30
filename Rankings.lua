@@ -1,10 +1,6 @@
 PocketMoneyRankings = PocketMoneyRankings or {}
 local lastRequestTime = {}
-local ADDON_PREFIX = "PMRank"
 local hasRequestedInitialData = false
-local realmName = GetRealmName()
-local playerName = UnitName("player")
-local mainPC = PocketMoneyCore.mainPC
 
 -- Helper Functions
 local function debug(msg)
@@ -25,6 +21,8 @@ local function SafeAmbiguate(name)
   return Ambiguate(name, "short")
 end
 
+-- AUDITS
+-- Audit the knownRogues Table
 local function AuditKnownRogues(realmName, mainChar, isAltUpdate, messageData)
   -- When handling alt data
   if isAltUpdate then
@@ -53,7 +51,78 @@ local function AuditKnownRogues(realmName, mainChar, isAltUpdate, messageData)
   end
 end
 
--- Send Data
+-- Audit Whoe DB
+function PocketMoneyRankings.AuditDB()
+  if PocketMoneyDB[realmName].main then
+    local mainChar = PocketMoneyDB[realmName].main
+    PocketMoneyDB[realmName][mainChar].main = true
+    PocketMoneyDB[realmName][mainChar].Alts = PocketMoneyDB[realmName][mainChar].Alts or {}
+
+    -- Move data to Alts table if it's not already there
+    for charName, charData in pairs(PocketMoneyDB[realmName]) do
+      if type(charData) == "table" and charData.AltOf == mainChar then
+        if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
+          PocketMoneyDB[realmName][mainChar].Alts[charName] = {
+            AltOf = mainChar,
+            Guild = charData.Guild,
+            lifetimeJunk = charData.lifetimeJunk,
+            lifetimeGold = charData.lifetimeGold,
+            lifetimeBoxValue = charData.lifetimeBoxValue,
+            class = charData.class,
+            Main = false,
+            Vers = charName.Vers
+          }
+        end
+      end
+    end
+    if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
+      return
+    else
+      PocketMoneyDB[realmName][playerName] = nil
+    end
+    PocketMoneyCore.updateChecksum(mainChar, charName)
+    PocketMoneyRankings.UpdateUI()
+  end
+
+  -- Verify alt relationships
+  for charName, data in pairs(PocketMoneyDB[realmName].knownRogues) do
+    if data.Alts and next(data.Alts) then
+      data.main = true
+    end
+    if data.main then
+      for altName, altData in pairs(data.Alts) do
+        if not altData.AltOf or altData.AltOf ~= charName then
+          altData.AltOf = charName
+        end
+      end
+    end
+  end
+  for realmName, realmData in pairs(PocketMoneyDB) do
+    if type(realmData) == "table" then
+        if realmData.transactions then
+            realmData.transactions = nil
+        end
+
+        -- Remove outdated 'guildRankings' field in realm-specific data
+        if realmData.guildRankings then
+            realmData.guildRankings = nil
+        end
+
+        if realmData.knownRogues then
+          for rogueName, rogueData in pairs(realmData.knownRogues) do
+              -- Check if the rogue is a local character (in PocketMoneyDB)
+              if realmData[rogueName]then
+                  realmData.knownRogues[rogueName] = nil
+              end
+          end
+      end
+    end
+  end
+print("Old fields removed successfully.")
+end
+
+-- DATA HANDLING SECTION
+-- Send OUR values to whoever requests
 function PocketMoneyRankings.SendUpdate(target)
   local currentMain = PocketMoneyDB[realmName].main
   local dbLocation
@@ -87,11 +156,37 @@ function PocketMoneyRankings.SendUpdate(target)
     if target then
       PocketMoneyCore.SendMessage(serialized, target)
     end
+  else
+    print("Serialization failed")
   end
 end
 
--- Request Data
+-- Annouce Our Presence To Players Joining PCMSync Channel
+function PocketMoneyRankings.AnnouncePresence(target)
+
+  local messageData = {
+    type = "PLAYER_ACTIVE",
+    player = UnitName("player"),
+    realm = GetRealmName(),
+    timestamp = GetServerTime()
+  }
+
+  local LibSerialize = LibStub("LibSerialize")
+    local success, serialized = pcall(function() 
+        return LibSerialize:Serialize(messageData) 
+    end)
+
+    if success then
+        if target then
+            PocketMoneyCore.SendMessage(serialized, target)
+        end
+    end
+end
+
+-- Request Data from other players
 function PocketMoneyRankings.RequestLatestData(targetPlayer)
+  local now = GetServerTime()
+
   local messageData = {
     type = "DATA_REQUEST",
     player = UnitName("player"),
@@ -105,44 +200,42 @@ function PocketMoneyRankings.RequestLatestData(targetPlayer)
   end)
 
   if success then
-    local now = GetServerTime()
     if targetPlayer then
-      if lastRequestTime[targetPlayer] and (now - lastRequestTime[targetPlayer]) < 60 then
-        return
-      end
       PocketMoneyCore.SendMessage(serialized, targetPlayer)
       lastRequestTime[targetPlayer] = now
     else
       for player in pairs(PocketMoneyDB.tempData.onlinePlayers) do
-        if lastRequestTime[player] and (now - lastRequestTime[player]) > 60 then
-          PocketMoneyCore.SendMessage(serialized, player)
-          lastRequestTime[player] = now
-        end
+        PocketMoneyCore.SendMessage(serialized, player)
+        lastRequestTime[player] = now
       end
     end
   end
 end
 
--- Recieve Data
+-- Recieving Data From Other Players
 function PocketMoneyRankings.ProcessUpdate(sender, messageData)
+
   if not messageData or type(messageData) ~= "table" then
     return
   end
 
-  PocketMoneyDB = PocketMoneyDB or {}
-  PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
-  PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
+  if messageData.player == playerName then 
+    return 
+  end
 
-  local senderName = sender:match("^([^-]+)")
-  if senderName == playerName then return end -- Ignore our own message
+  -- Handle Player Presence
+  if messageData.type == "PLAYER_ACTIVE" then
+    PocketMoneyDB.tempData.onlinePlayers[messageData.player] = true
+  end
 
   -- Handle DATA_REQUEST type
   if messageData.type == "DATA_REQUEST" then
-    PocketMoneyDB.tempData.onlinePlayers[senderName] = true
-    PocketMoneyRankings.SendUpdate(senderName)
+    PocketMoneyDB.tempData.onlinePlayers[messageData.player] = true
+    PocketMoneyRankings.SendUpdate(messageData.player)
     return
   end
 
+  -- Handle a Player Changing Their Main
   if messageData.type == "MAIN_CHANGE" then
     local realmName = messageData.realm 
     if messageData.oldMain then
@@ -150,104 +243,58 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData)
     end
     PocketMoneyDB[realmName].knownRogues[messageData.newMain] = messageData.mainData
     AuditKnownRogues(realmName, messageData.newMain, false, messageData.mainData)
+    PocketMoneyRankings.UpdateUI()
     return
   end
 
-  local realmName = messageData.realm
-  local senderName = messageData.player
-  local guildName = messageData.guild
-  if not guildName then
-    guildName = PocketMoneyCore.GetPlayerGuild(senderName)
-  end
-
-  PocketMoneyDB[realmName] = PocketMoneyDB[realmName] or {}
-  PocketMoneyDB[realmName].knownRogues = PocketMoneyDB[realmName].knownRogues or {}
-
-  if not messageData.AltOf then
-    if not PocketMoneyDB[realmName].knownRogues[senderName] then
-      PocketMoneyDB[realmName].knownRogues[senderName] = {}
-    end
-
-    PocketMoneyDB[realmName].knownRogues[senderName] = {
-      gold = messageData.gold,
-      junk = messageData.junk,
-      boxValue = messageData.boxValue,
-      timestamp = messageData.timestamp,
-      lastSeen = GetServerTime(),
-      Guild = guildName,
-      main = messageData.main,
-      Alts = messageData.Alts or {},
-      Vers = messageData.Vers
-    }
-  else
-    local mainChar = messageData.AltOf
-    if not PocketMoneyDB[realmName].knownRogues[mainChar] then
-      PocketMoneyDB[realmName].knownRogues[mainChar] = {
-        Alts = {},
-        main = true
+  -- Handle Up Player Updates
+  if messageData.type == "PLAYER_UPDATE" then
+    local realmName = messageData.realm
+    local senderName = messageData.player
+    local guildName = messageData.guild or PocketMoneyCore.GetPlayerGuild(senderName)
+    if not messageData.AltOf then
+      PocketMoneyDB[realmName].knownRogues[senderName] = {
+        gold = messageData.gold or 0,
+        junk = messageData.junk or 0,
+        boxValue = messageData.boxValue or 0,
+        timestamp = messageData.timestamp or GetServerTime(),
+        lastSeen = GetServerTime(),
+        Guild = guildName or nil,
+        main = messageData.main or false,
+        Alts = messageData.Alts or {},
+        Vers = messageData.Vers or "Unknown"
+      }
+    else
+      local mainChar = messageData.AltOf
+      if not PocketMoneyDB[realmName].knownRogues[mainChar] then
+        PocketMoneyDB[realmName].knownRogues[mainChar] = {
+          Alts = {},
+          main = true
+        }
+      end
+      PocketMoneyDB[realmName].knownRogues[mainChar].Alts = PocketMoneyDB[realmName].knownRogues[mainChar].Alts or {}
+      PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {
+        gold = messageData.gold or 0,
+        junk = messageData.junk or 0,
+        boxValue = messageData.boxValue or 0,
+        timestamp = messageData.timestamp or 0,
+        lastSeen = GetServerTime(),
+        Guild = guildName or nil,
+        AltOf = messageData.AltOf or mainChar,
+        Vers = messageData.Vers or "Unknown"
       }
     end
-    PocketMoneyDB[realmName].knownRogues[mainChar].Alts = PocketMoneyDB[realmName].knownRogues[mainChar].Alts or {}
-    PocketMoneyDB[realmName].knownRogues[mainChar].Alts[senderName] = {
-      gold = messageData.gold,
-      junk = messageData.junk,
-      boxValue = messageData.boxValue,
-      timestamp = messageData.timestamp,
-      lastSeen = GetServerTime(),
-      Guild = guildName,
-      AltOf = messageData.AltOf,
-      Vers = messageData.Vers
-    }
-  end
-  if messageData.AltOf then
-    AuditKnownRogues(realmName, messageData.AltOf, true, messageData)
-  else
-    AuditKnownRogues(realmName, senderName, false, messageData)
-  end
-end
-
--- Update the rankings list
-function PocketMoneyRankings.ShowRankings()
-  local rankings = {}
-
-  for player, data in pairs(PocketMoneyDB[realmName].guildRankings or {}) do
-    if player == playerName then
-      local myData = PocketMoneyDB[realmName][playerName]
-      local total = (myData.lifetimeGold or 0) + (myData.lifetimeJunk or 0) + (myData.lifetimeBoxValue or 0)
-      table.insert(rankings, {
-        player = playerName,
-        total = total,
-        gold = myData.lifetimeGold or 0,
-        junk = myData.lifetimeJunk or 0,
-        boxValue = myData.lifetimeBoxValue or 0
-      })
+    if messageData.AltOf then
+      AuditKnownRogues(realmName, messageData.AltOf, true, messageData)
     else
-      local total = (data.gold or 0) + (data.junk or 0) + (data.boxValue or 0)
-      table.insert(rankings, {
-        player = player, 
-        total = total,
-        gold = data.gold or 0,
-        junk = data.junk or 0,
-        boxValue = data.boxValue or 0
-      })
+      AuditKnownRogues(realmName, senderName, false, messageData)
     end
-  end
-
-  for _, data in ipairs(rankings) do
-    print(data.player, "Total:", data.total)
-  end
-  
-  table.sort(rankings, function(a, b) return a.total > b.total end)
-  
-  for i, data in ipairs(rankings) do
-    if i <= 10 then
-      print(string.format("%d. %s - %s", i, data.player, 
-        PocketMoneyCore.FormatMoney(data.total)))
-    end
+    PocketMoneyRankings.UpdateUI()
   end
 end
 
 function PocketMoneyRankings.BroadcastMainChange(oldMain, newMain)
+
   local updateData = {
     type = "MAIN_CHANGE",
     realm = realmName,
@@ -269,78 +316,6 @@ function PocketMoneyRankings.BroadcastMainChange(oldMain, newMain)
   end
 end
 
-function PocketMoneyRankings.AuditDB()
-  if PocketMoneyDB[realmName].main then
-    local mainChar = PocketMoneyDB[realmName].main
-    PocketMoneyDB[realmName][mainChar].main = true
-    PocketMoneyDB[realmName][mainChar].Alts = PocketMoneyDB[realmName][mainChar].Alts or {}
-
-    -- Move data to Alts table if it's not already there
-    for charName, charData in pairs(PocketMoneyDB[realmName]) do
-      if type(charData) == "table" and charData.AltOf == mainChar then
-        if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
-          PocketMoneyDB[realmName][mainChar].Alts[charName] = {
-            AltOf = mainChar,
-            Guild = charData.Guild,
-            lifetimeJunk = charData.lifetimeJunk,
-            lifetimeGold = charData.lifetimeGold,
-            lifetimeBoxValue = charData.lifetimeBoxValue,
-            class = charData.class,
-            Main = false,
-            Vers = charName.Vers
-          }
-        end
-      end
-    end
-    if not PocketMoneyDB[realmName][mainChar].Alts[charName] then
-      return -- don't delete as it's not moved.
-    else
-      PocketMoneyDB[realmName][playerName] = nil
-    end
-    PocketMoneyCore.updateChecksum(mainChar, charName)
-    PocketMoneyRankings.UpdateUI()
-  end
-
-  -- Verify alt relationships
-  for charName, data in pairs(PocketMoneyDB[realmName].knownRogues) do
-    if data.Alts and next(data.Alts) then
-      data.main = true
-    end
-    if data.main then
-      for altName, altData in pairs(data.Alts) do
-        if not altData.AltOf or altData.AltOf ~= charName then
-          altData.AltOf = charName
-        end
-      end
-    end
-  end
-  for realmName, realmData in pairs(PocketMoneyDB) do
-    if type(realmData) == "table" then
-        if realmData.transactions then
-            print("Removing outdated 'transactions' for realm:", realmName)
-            realmData.transactions = nil
-        end
-
-        -- Remove outdated 'guildRankings' field in realm-specific data
-        if realmData.guildRankings then
-            print("Removing outdated 'guildRankings' for realm:", realmName)
-            realmData.guildRankings = nil
-        end
-
-        if realmData.knownRogues then
-          for rogueName, rogueData in pairs(realmData.knownRogues) do
-              -- Check if the rogue is a local character (in PocketMoneyDB)
-              if realmData[rogueName]then
-                  print("Removing local character from 'knownRogues':", rogueName)
-                  realmData.knownRogues[rogueName] = nil
-              end
-          end
-      end
-    end
-  end
-print("Old fields removed successfully.")
-end
-
 local rankingsFrame = CreateFrame("Frame")
 rankingsFrame:RegisterEvent("CHAT_MSG_ADDON")
 rankingsFrame:RegisterEvent("ADDON_LOADED")
@@ -348,12 +323,7 @@ rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL")
 rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL_JOIN")
 rankingsFrame:RegisterEvent("CHAT_MSG_CHANNEL_LEAVE")
 rankingsFrame:SetScript("OnEvent", function(self, event, ...)
-  if event == "ADDON_LOADED" then
-    local addonName = ...
-    if addonName == "PocketMoney" then
-      C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
-    end
-  elseif event == "CHAT_MSG_ADDON" then
+  if event == "CHAT_MSG_ADDON" then
     local prefix, text, channel, sender = ...
     if prefix == ADDON_PREFIX then
       local LibSerialize = LibStub("LibSerialize")
@@ -368,45 +338,17 @@ rankingsFrame:SetScript("OnEvent", function(self, event, ...)
       end
     end
   elseif event == "CHAT_MSG_CHANNEL_JOIN" then
-    local _, playerName, _, _, _, _, _, _, channelBaseName = ...
-    local playerNew = getNameWithoutRealm(playerName)
-    local simplifiedJoiningPlayer = SafeAmbiguate(playerJoining, "short")
-    local simplifiedLocalPlayer = SafeAmbiguate(localPlayerName, "short")
+    local _, playerJoined, _, _, _, _, _, _, channelBaseName = ...
+    local playerNew = getNameWithoutRealm(playerJoined)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
+      PocketMoneyRankings.AnnouncePresence(playerNew)
       PocketMoneyDB.tempData.onlinePlayers[playerNew] = true
-      PocketMoneyRankings.RequestLatestData(playerNew)
-    end
-    if simplifiedJoiningPlayer == simplifiedLocalPlayer and channelName == PocketMoneyCore.CHANNEL_NAME then
-      C_Timer.After(1, function()
-        PocketMoneyRankings.RequestLatestData()
-      end)
     end
   elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
-    local _, playerName, _, _, _, _, _, _, channelBaseName = ...
-    local playerNew = getNameWithoutRealm(playerName)
+    local _, playerLeft, _, _, _, _, _, _, channelBaseName = ...
+    local playerNew = getNameWithoutRealm(playerLeft)
     if channelBaseName == PocketMoneyCore.CHANNEL_NAME then
       PocketMoneyDB.tempData.onlinePlayers[playerNew] = nil
     end
   end
-end)
-
-local isReloadingUI = false
-local cleanupFrame = CreateFrame("Frame")
-
-cleanupFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
-cleanupFrame:RegisterEvent("ADDON_LOADED")
-
-cleanupFrame:SetScript("OnEvent", function(self, event, addonName)
-    if event == "PLAYER_LEAVING_WORLD" then
-        isReloadingUI = true
-    elseif event == "ADDON_LOADED" and addonName == "PocketMoney" then
-        isReloadingUI = false
-    end
-end)
-
-cleanupFrame:RegisterEvent("PLAYER_LOGOUT")
-cleanupFrame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_LOGOUT" and not isReloadingUI then
-        PocketMoneyDB.tempData.onlinePlayers = {}
-    end
 end)
