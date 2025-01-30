@@ -215,12 +215,18 @@ local function debug(msg)
 end
 
 function PocketMoneyCore.SendMessage(message, target)
+  if not target then return end
   CTL:SendAddonMessage(
     "NORMAL",
     ADDON_PREFIX,
     message,
     "WHISPER",
-    target
+    target,
+    function(result)
+      if not result then
+        PocketMoneyDB.tempData.onlinePlayers[target] = nil
+      end
+    end
   )
 end
 
@@ -395,23 +401,10 @@ PocketMoneyCore.attemptChannelJoin = function()
      return
   end
   joinAttempts = joinAttempts + 1
-
   if GetChannelName(PocketMoneyCore.CHANNEL_NAME) > 0 then
-    LeaveChannelByName(PocketMoneyCore.CHANNEL_NAME)
-    C_Timer.After(5, function()
-      JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
-      local id = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
-      if id > 0 then
-        ChatFrame_RemoveChannel(DEFAULT_CHAT_FRAME, PocketMoneyCore.CHANNEL_NAME)
-        for i=1, NUM_CHAT_WINDOWS do
-          local frame = _G["ChatFrame"..i]
-          if frame then
-            ChatFrame_RemoveChannel(frame, PocketMoneyCore.CHANNEL_NAME)
-          end
-        end
-      end
-    end)
+    print("Already in channel!")
   else
+    PocketMoneyDB.tempData.onlinePlayers = {}
     JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
     C_Timer.After(0.5, function()
       local id = GetChannelName(PocketMoneyCore.CHANNEL_NAME)
@@ -612,7 +605,6 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     if addonName == "PocketMoney" then
       C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
       PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
-      PocketMoneyDB.tempData.onlinePlayers = PocketMoneyDB.tempData.onlinePlayers or {}
       PocketMoneyDB.tempData.onlinePlayers[playerName] = true
       C_Timer.After(0.3, function()
         InitializePlayerData()
@@ -621,6 +613,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
           C_Timer.After(0.2, function()
             PocketMoneyWhatsNew.CheckUpdateNotification()
             C_Timer.After(2, function()
+              PocketMoneyCore.attemptChannelJoin()
               PocketMoneyRankings.UpdateUI()
               print("PickPocket loaded Successfully")
             end)
@@ -704,6 +697,7 @@ PocketMoney:SetScript("OnEvent", function(self, event, ...)
     wipe(lastProcessedItems)
   end
 end)
+
 C_Timer.NewTicker(30, function()
   if not checkChannelStatus() then
     debug("Channel join failed - attempting rejoin")

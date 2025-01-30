@@ -1,9 +1,9 @@
-ADDON_VERSION = "1.9.8"
+ADDON_VERSION = "1.9.9"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.9.8"] = [[
+  ["1.9.9"] = [[
 Pocket Money Updated to Version 1.9.X:
 
 Features:
@@ -11,7 +11,7 @@ Features:
 - You can now set alt rogues as alts.
 
 UI:
-- Settings UI added. /pm settings - or use the minimap icon!
+- Settings UI added. /pmset - or use the minimap icon!
 - New option for popout frame!
 
 Enjoy the update!
