@@ -99,7 +99,6 @@ local function CreatePopoutFrame()
 
   tinsert(UISpecialFrames, "PocketMoneyPopoutFrame")
 
-  PopUI:Hide()
   PopUI:SetScript("OnHide", function()
     PocketMoneyDB.popoutWasVisible = false
   end)
@@ -153,12 +152,11 @@ end
 C_Timer.NewTicker(1, PocketMoneyPopoutUI.Update)
 
 local function OnEvent(self, event, arg1)
-  if event == "PLAYER_LOGIN" or (event == "ADDON_LOADED" and arg1 == "PocketMoney") then
+  if event == "PLAYER_LOGIN" then
     CreatePopoutFrame()
   end
 end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:SetScript("OnEvent", OnEvent)
