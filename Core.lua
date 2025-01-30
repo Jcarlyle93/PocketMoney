@@ -401,9 +401,7 @@ PocketMoneyCore.attemptChannelJoin = function()
      return
   end
   joinAttempts = joinAttempts + 1
-  if GetChannelName(PocketMoneyCore.CHANNEL_NAME) > 0 then
-    print("Already in channel!")
-  else
+  if GetChannelName(PocketMoneyCore.CHANNEL_NAME) < 0 then
     PocketMoneyDB.tempData.onlinePlayers = {}
     JoinChannelByName(PocketMoneyCore.CHANNEL_NAME, PocketMoneyCore.CHANNEL_PASSWORD)
     C_Timer.After(0.5, function()

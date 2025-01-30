@@ -192,8 +192,9 @@ PocketMoneyRankings.UpdateUI = function()
     end
   else
     for rogueName, rogueData in pairs(PocketMoneyDB[realmName].knownRogues) do
-      if localPlayerGuild then
-        if rogueData.Guild == localPlayerGuild then
+      local guild = localPlayerGuild
+      if guild then
+        if rogueData.Guild == guild then
           local total = (rogueData.gold or 0) + (rogueData.junk or 0) + (rogueData.boxValue or 0)
           if rogueData.main and rogueData.Alts then
             local altsBreakdown = {}
