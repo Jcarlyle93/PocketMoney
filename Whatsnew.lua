@@ -1,14 +1,18 @@
-local ADDON_VERSION = "1.5.4"
+ADDON_VERSION = "1.9.11"
 
 PocketMoneyWhatsNew = {}
 
 local CHANGELOG = {
-  ["1.5.4"] = [[
-Pocket Money Updated to Version 1.5.4:
+  ["1.9.11"] = [[
+Pocket Money Updated to Version 1.9.X:
 
-- Fixed initialisation issues for rogues with broken DBs
+Features:
+- You can now set a character as your main rogue.
+- You can now set alt rogues as alts.
 
-Coming soon - Rogue Pickpocket Achievements!
+UI:
+- Settings UI added. /pmset - or use the minimap icon!
+- New option for popout frame!
 
 Enjoy the update!
 Pocket Money, for rogues, by rogues.
@@ -65,7 +69,24 @@ end
 function PocketMoneyWhatsNew.CreateUpdateNotificationFrame()
  
   local frame = CreateFrame("Frame", "PocketMoneyUpdateNotificationFrame", UIParent, "BackdropTemplate")
-  frame:SetSize(300, 200)
+  local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  titleText:SetText("Pocket Money Update " .. ADDON_VERSION)
+
+  local contentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  contentText:SetWordWrap(true)
+  contentText:SetText(PocketMoneyWhatsNew.GetChangelogText())
+
+  local frameWidth = 300
+  frame:SetWidth(frameWidth)
+  contentText:SetWidth(frameWidth - 40)
+
+  titleText:SetPoint("TOP", frame, "TOP", 0, -20)
+  contentText:SetPoint("TOP", titleText, "BOTTOM", 0, -20)
+  contentText:SetPoint("LEFT", frame, "LEFT", 20, 0)
+  contentText:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
+
+  local totalHeight = 40 + titleText:GetHeight() + contentText:GetHeight() + 20  -- Padding + title + content + bottom padding
+  frame:SetHeight(totalHeight)
   
   frame:SetPoint("CENTER", UIParent, "CENTER", -250, 0)
   frame:SetBackdrop({
@@ -79,19 +100,6 @@ function PocketMoneyWhatsNew.CreateUpdateNotificationFrame()
    
   frame:SetFrameStrata("DIALOG")
   frame:SetFrameLevel(255)
-
-  local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  titleText:SetPoint("TOP", frame, "TOP", 0, -20)
-  titleText:SetText("Pocket Money Update " .. ADDON_VERSION)
-  titleText:SetTextColor(1, 1, 1, 1) 
-
-  local contentText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  contentText:SetPoint("TOP", titleText, "BOTTOM", 0, -20)
-  contentText:SetPoint("LEFT", frame, "LEFT", 20, 0)
-  contentText:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
-  contentText:SetWordWrap(true)
-  contentText:SetText(PocketMoneyWhatsNew.GetChangelogText())
-  contentText:SetTextColor(1, 1, 1, 1)
 
   local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
   closeButton:SetPoint("TOPRIGHT")
