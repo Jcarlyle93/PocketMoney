@@ -37,12 +37,13 @@ local PICKPOCKET_LOCKBOXES = {
 }
 
 -- Database Initialisation
-local CURRENT_DB_VERSION = 2.2
+local CURRENT_DB_VERSION = 2.3
 
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
 PocketMoneyDB.UsePopoutDisplay  = PocketMoneyDB.UsePopoutDisplay or false
 PocketMoneyDB.popoutPosition = PocketMoneyDB.popoutPosition or nil
+PocketMoneyDB.HidePopoutInCombat = PocketMoneyDB.HidePopoutInCombat or false
 PocketMoneyDB.tempData = PocketMoneyDB.tempData or {}
 PocketMoneyDB.settings = PocketMoneyDB.settings or {}
 PocketMoneyDB.settings.includeAllRogues = PocketMoneyDB.settings.includeAllRogues or true

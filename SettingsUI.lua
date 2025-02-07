@@ -168,14 +168,39 @@ end
 local valueDisplayCheckbox = CreateFrame("CheckButton", nil, globalFrame, "UICheckButtonTemplate")
 valueDisplayCheckbox:SetPoint("TOPLEFT", mainDropdown, "BOTTOMLEFT", 15, -20)
 valueDisplayCheckbox:SetSize(24, 24)
-valueDisplayCheckbox:SetScript("OnClick", function(self)
-  local isChecked = self:GetChecked()
-  PocketMoneyDB.UsePopoutDisplay = isChecked
-end)
+
+local combatHideCheckbox = CreateFrame("CheckButton", nil, globalFrame, "UICheckButtonTemplate")
+combatHideCheckbox:SetPoint("TOPLEFT", valueDisplayCheckbox, "BOTTOMLEFT", 20, -5) 
+combatHideCheckbox:SetSize(24, 24)
 
 local valueDisplayLabel = globalFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 valueDisplayLabel:SetPoint("LEFT", valueDisplayCheckbox, "RIGHT", 5, 0)
 valueDisplayLabel:SetText("Use Popout Values Display for /pm")
+
+local combatHideLabel = globalFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+combatHideLabel:SetPoint("LEFT", combatHideCheckbox, "RIGHT", 5, 0)
+combatHideLabel:SetText("Hide During Combat")
+
+
+valueDisplayCheckbox:SetScript("OnClick", function(self)
+  local isChecked = self:GetChecked()
+  PocketMoneyDB.UsePopoutDisplay = isChecked
+  combatHideCheckbox:SetEnabled(isChecked)
+    UpdateCheckboxVisuals(combatHideCheckbox, isChecked)
+    
+    if not isChecked then
+        combatHideCheckbox:SetChecked(false)
+        PocketMoneyDB.HidePopoutInCombat = false
+        combatHideLabel:SetTextColor(0.5, 0.5, 0.5)
+    else
+        combatHideLabel:SetTextColor(1, 1, 1)
+    end
+end)
+
+combatHideCheckbox:SetScript("OnClick", function(self)
+  local isChecked = self:GetChecked()
+  PocketMoneyDB.HidePopoutInCombat = isChecked
+end)
 
 function togglePopoutFlag()
   PocketMoneyDB.UsePopoutDisplay = not PocketMoneyDB.UsePopoutDisplay
@@ -183,8 +208,25 @@ function togglePopoutFlag()
   return PocketMoneyDB.UsePopoutDisplay
 end
 
+local UpdateCombatHideState = function()
+  local popoutEnabled = valueDisplayCheckbox:GetChecked()
+  
+  if combatHideCheckbox then
+    if not popoutEnabled then
+      combatHideCheckbox:SetChecked(false)
+      PocketMoneyDB.HidePopoutInCombat = false
+      combatHideLabel:SetTextColor(0.5, 0.5, 0.5)
+    else
+      combatHideLabel:SetTextColor(1, 1, 1)
+    end
+    
+    combatHideCheckbox:SetEnabled(popoutEnabled)
+    UpdateCheckboxVisuals(combatHideCheckbox, popoutEnabled)
+  end
+end
+
 local autoFlagCheckbox = CreateFrame("CheckButton", nil, globalFrame, "UICheckButtonTemplate")
-autoFlagCheckbox:SetPoint("TOPLEFT", valueDisplayCheckbox, "BOTTOMLEFT", 0, -10)
+autoFlagCheckbox:SetPoint("TOPLEFT", combatHideCheckbox, "BOTTOMLEFT", 0, -10)
 autoFlagCheckbox:SetSize(24, 24)
 autoFlagCheckbox:SetChecked(PocketMoneyDB.AutoFlag or false)
 autoFlagCheckbox:SetScript("OnClick", function(self)
@@ -206,12 +248,12 @@ end
 local divider = SettingsUI:CreateTexture(nil, "ARTWORK")
 divider:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Divider")
 divider:SetSize(300, 16)
-divider:SetPoint("TOP", globalFrame, "BOTTOM", 35, -25)
+divider:SetPoint("TOP", globalFrame, "BOTTOM", 35, -50)
 divider:SetPoint("CENTER", SettingsUI, "CENTER", 0, divider:GetTop())
 
 local characterFrame = CreateFrame("Frame", nil, SettingsUI)
 characterFrame:SetSize(280, 100)
-characterFrame:SetPoint("TOP", divider, "BOTTOM", -70, -10)
+characterFrame:SetPoint("TOP", divider, "BOTTOM", -70, 0)
 
 local characterHeader = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 characterHeader:SetPoint("TOPLEFT", 20, 0)
@@ -303,6 +345,8 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
     setAltCheckbox:SetChecked(isAlt)
     autoFlagCheckbox:SetChecked(PocketMoneyDB.AutoFlag or false)
     valueDisplayCheckbox:SetChecked(PocketMoneyDB.UsePopoutDisplay or false)
+    combatHideCheckbox:SetChecked(PocketMoneyDB.HidePopoutInCombat or false)
+    UpdateCombatHideState() 
     C_Timer.After(0.1, function()
       pcall(UpdateMainDropdown)
     end)

@@ -1,9 +1,35 @@
 PocketMoneyPopoutUI = {}
+local wasShownBeforeCombat = false
+
+local function UpdateFrameWidth()
+  local PopUI = PocketMoneyPopoutUI.PopUI
+  if not PopUI then return end
+  
+  local padding = 40
+  local maxWidth = 0
+  local textElements = {
+    PopUI.rawGoldLifetime,
+    PopUI.junkLifetime,
+    PopUI.boxValueLifetime,
+    PopUI.rawGoldSession,
+    PopUI.junkSession,
+    PopUI.boxValueSession
+  }
+  
+  for _, fontString in ipairs(textElements) do
+    if fontString and fontString.GetStringWidth then
+      local width = fontString:GetStringWidth() + (fontString.label and fontString.label:len() * 6 or 0)
+      maxWidth = math.max(maxWidth, width)
+    end
+  end
+  
+  PopUI:SetWidth(math.max(maxWidth + padding, 150))
+end
 
 local function CreatePopoutFrame()
   PocketMoneyPopoutUI.PopUI = CreateFrame("Frame", "PocketMoneyPopoutFrame", UIParent, "BackdropTemplate")
   local PopUI = PocketMoneyPopoutUI.PopUI
-  PopUI:SetSize(150, 180)
+  PopUI:SetHeight(180)
   PopUI:SetPoint("CENTER")
   PopUI:SetMovable(true)
   PopUI:EnableMouse(true)
@@ -82,6 +108,8 @@ local function CreatePopoutFrame()
   PopUI.junkSession = junkSession
   PopUI.boxValueSession = boxValueSession
 
+  UpdateFrameWidth()
+
   C_Timer.After(0.5, function()
     if PocketMoneyDB and PocketMoneyDB.popoutPosition then
       local position = PocketMoneyDB.popoutPosition
@@ -97,12 +125,30 @@ local function CreatePopoutFrame()
     end
   end)
 
-  tinsert(UISpecialFrames, "PocketMoneyPopoutFrame")
-
   PopUI:SetScript("OnHide", function()
     PocketMoneyDB.popoutWasVisible = false
   end)
   return PopUI
+end
+
+local function OnCombatEvent()
+  local PopUI = PocketMoneyPopoutUI.PopUI
+  if not PopUI then return end
+  
+  if InCombatLockdown() then
+    if PocketMoneyDB.HidePopoutInCombat then
+      wasShownBeforeCombat = PopUI:IsShown()
+      if wasShownBeforeCombat then
+        PopUI:Hide()
+      end
+    end
+  else
+    if PocketMoneyDB.HidePopoutInCombat and wasShownBeforeCombat then
+      PopUI:Show()
+      PocketMoneyPopoutUI.Update()
+      wasShownBeforeCombat = false
+    end
+  end
 end
 
 function PocketMoneyPopoutUI.Toggle()
@@ -146,6 +192,7 @@ function PocketMoneyPopoutUI.Update()
   PopUI.rawGoldSession:SetText(PopUI.rawGoldSession.label .. " " .. PocketMoneyCore.FormatMoney(_G.sessionGold or 0))
   PopUI.junkSession:SetText(PopUI.junkSession.label .. " " .. PocketMoneyCore.FormatMoney(_G.sessionJunk or 0))
   PopUI.boxValueSession:SetText(PopUI.boxValueSession.label .. " " .. PocketMoneyCore.FormatMoney(_G.sessionBoxValue or 0))
+  UpdateFrameWidth()
 end
 
 -- Create an update ticker
@@ -160,3 +207,12 @@ end
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", OnEvent)
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:SetScript("OnEvent", function(self, event, arg1)
+  if event == "PLAYER_LOGIN" then
+    CreatePopoutFrame()
+  elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+    OnCombatEvent()
+  end
+end)
