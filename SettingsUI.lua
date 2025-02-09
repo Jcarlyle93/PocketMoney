@@ -282,6 +282,7 @@ setAltCheckbox:SetScript("OnClick", function(self)
 end)
 
 if playerName == PocketMoneyDB[realmName].main then
+  UpdateCheckboxVisuals(setAltCheckbox, true)
   setAltCheckbox:Disable()
   setAltLabel:SetText("Set as alt (Cannot set main character as alt)")
 end

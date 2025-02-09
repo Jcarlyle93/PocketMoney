@@ -1,12 +1,11 @@
 PocketMoneySecurity = {}
 
 function PocketMoneySecurity.generateSalt()
-  local serverTime = GetServerTime()
   local playerGUID = UnitGUID("player")
   local realmName = GetRealmName()
   local characterName = UnitName("player")
   local characterLevel = UnitLevel("player")
-  local baseString = "PM" .. playerGUID .. realmName .. characterName .. characterLevel .. serverTime
+  local baseString = "PM" .. playerGUID .. realmName .. characterName .. characterLevel
   local complexSalt = ""
   local reversed = string.reverse(baseString)
   
@@ -29,12 +28,24 @@ function PocketMoneySecurity.generateChecksum(gold, junk)
     hash = ((hash * 33) + string.byte(combined, i)) % 4294967296
   end
   
-  return tostring(hash)
+  return {
+    hash = tostring(hash),
+    salt = salt
+  }
 end
 
-function PocketMoneySecurity.verifyIntegrity(gold, junk, checksum)
-  local currentChecksum = PocketMoneySecurity.generateChecksum(gold, junk)
-  return currentChecksum == checksum
+function PocketMoneySecurity.verifyIntegrity(gold, junk, storedChecksum)
+  if not storedChecksum or not storedChecksum.hash or not storedChecksum.salt then
+    return false
+  end
+  
+  local combined = gold .. ":" .. junk .. ":" .. storedChecksum.salt
+  local hash = 5381
+  for i = 1, #combined do
+    hash = ((hash * 33) + string.byte(combined, i)) % 4294967296
+  end
+  
+  return tostring(hash) == storedChecksum.hash
 end
 
 function PocketMoneySecurity.logTransaction(realmName, playerName, amount, type, timestamp)

@@ -37,7 +37,7 @@ local PICKPOCKET_LOCKBOXES = {
 }
 
 -- Database Initialisation
-local CURRENT_DB_VERSION = 2.3
+local CURRENT_DB_VERSION = 2.5
 
 PocketMoneyDB = PocketMoneyDB or {}
 PocketMoneyDB.AutoFlag = PocketMoneyDB.AutoFlag or false
@@ -67,20 +67,69 @@ function InitializeNewServer()
 end
 
 function  InitializePlayerData()
+  -- Check is player is a rogue
   if not isRogue then return end
+
+  -- Check to see if we need a new realm entry
   InitializeNewServer()
-  if PocketMoneyDB and PocketMoneyDB[realmName] then
-    if PocketMoneyDB[realmName].main then
-      if PocketMoneyDB[realmName][PocketMoneyCore.mainPC] and PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts then
-        if PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName] then
-        return
-        end
+
+  -- Check if player is a main character
+  if PocketMoneyDB[realmName][playerName] then
+    local data = PocketMoneyDB[realmName][playerName]
+     -- Verify data integrity for main
+    if data.checksum then
+      local isValid = PocketMoneySecurity.verifyIntegrity(data.lifetimeGold or 0, data.lifetimeJunk or 0, data.checksum)
+      if not isValid then
+        print("Data tampering detected. Resetting statistics.")
+        -- Reset to default values
+        data.lifetimeGold = 0
+        data.lifetimeJunk = 0
+        data.lifetimeBoxValue = 0
+        data.checksum = {
+          hash = PocketMoneySecurity.generateChecksum(data.lifetimeGold or 0, data.lifetimeJunk or 0).hash,
+          salt = PocketMoneySecurity.generateSalt()
+        }
       end
+    else
+      -- If no checksum exists, generate one
+      data.checksum = {
+        hash = PocketMoneySecurity.generateChecksum(data.lifetimeGold or 0, data.lifetimeJunk or 0).hash,
+        salt = PocketMoneySecurity.generateSalt()
+      }
     end
-    if PocketMoneyDB[realmName][playerName] then
+    return
+  end
+
+  -- Check if player is an alt in main's Alts table
+  if PocketMoneyDB[realmName].main then
+    local mainChar = PocketMoneyDB[realmName].main
+    if PocketMoneyDB[realmName][mainChar].Alts and 
+        PocketMoneyDB[realmName][mainChar].Alts[playerName] then
+      local data = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+      -- Verify data integrity for alt
+      if data.checksum then
+        local isValid = PocketMoneySecurity.verifyIntegrity(data.lifetimeGold or 0, data.lifetimeJunk or 0, data.checksum)
+        if not isValid then
+          print("Data tampering detected. Resetting statistics.")
+          data.lifetimeGold = 0
+          data.lifetimeJunk = 0
+          data.lifetimeBoxValue = 0
+          data.checksum = {
+            hash = PocketMoneySecurity.generateChecksum(data.lifetimeGold or 0, data.lifetimeJunk or 0).hash,
+            salt = PocketMoneySecurity.generateSalt()
+          }
+        end
+      else
+        data.checksum = {
+          hash = PocketMoneySecurity.generateChecksum(data.lifetimeGold or 0, data.lifetimeJunk or 0).hash,
+          salt = PocketMoneySecurity.generateSalt()
+        }
+      end
       return
     end
-  end
+  end  
+
+  -- If we get here, character doesn't exist anywhere - create new entry
   PocketMoneyDB[realmName][playerName] = {
     lifetimeGold = 0,
     lifetimeJunk = 0,
@@ -89,7 +138,9 @@ function  InitializePlayerData()
     class = playerClass,
     Alts = {}
   }
-  if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main then
+
+  if PocketMoneyDB.AutoFlag and PocketMoneyDB[realmName].main and 
+     playerName ~= PocketMoneyDB[realmName].main then
     C_Timer.After(0.1, function()
       PocketMoneyCore.SetAsAlt(playerName)
     end)
@@ -103,9 +154,13 @@ local function UpgradeDatabase()
   end
   local currentVersion = PocketMoneyDB.dbVersion
   local targetLocation
+
+  if PocketMoneyDB[realmName].main then
+    PocketMoneyCore.mainPC = PocketMoneyDB[realmName].main
+  end
+
   if PocketMoneyCore.IsAltCharacter(playerName) then
-    local mainChar = PocketMoneyDB[realmName][playerName].AltOf
-    targetLocation = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+    targetLocation = PocketMoneyDB[realmName][PocketMoneyCore.mainPC].Alts[playerName]
   else
     targetLocation = PocketMoneyDB[realmName][playerName]
   end
@@ -116,13 +171,13 @@ local function UpgradeDatabase()
   if currentVersion < CURRENT_DB_VERSION then
     -- Latest Schema
     local schema = {
-      lifetimeGold = 0,
-      lifetimeJunk = 0,
-      lifetimeBoxValue = 0,
+      lifetimeGold = targetLocation.lifetimeGold or 0,
+      lifetimeJunk = targetLocation.lifetimeJunk or 0,
+      lifetimeBoxValue = targetLocation.lifetimeBoxValue or 0,
       Guild = localPlayerGuild,
       main = false,
-      AltOf = nil,
-      checksum = nil,
+      AltOf = targetLocation.AltOf,
+      checksum = targetLocation.checksum,
       class = playerClass,
       Vers = ADDON_VERSION
     }
@@ -134,7 +189,13 @@ local function UpgradeDatabase()
       end
     end
 
+    PocketMoneyCore.AuditLocal()
     PocketMoneyRankings.AuditDB()
+
+    for rogueName, rogueData in pairs(PocketMoneyDB[realmName].knownRogues) do
+      PocketMoneyRankings.AuditKnownRogues(realmName, rogueName, false, rogueData)
+    end
+
     print("UPGRADING DATABASE!")
     for key, defaultValue in pairs(schema) do
       targetLocation[key] = targetLocation[key] or defaultValue
@@ -206,7 +267,7 @@ function PocketMoneyCore.AuditLocal()
           PocketMoneyDB[realmName][mainChar].Alts[altName] = nil
       end
   end
-  PocketMoneyRankings.UpdateUI()
+  QueueUIUpdate()
   print("AuditLocal completed. Database cleaned up.")
 end
 
@@ -232,12 +293,16 @@ function PocketMoneyCore.SendMessage(message, target)
 end
 
 PocketMoneyCore.IsAltCharacter = function(name)
-  if not PocketMoneyDB[realmName].main then
-    return false
+  if not name or not PocketMoneyDB[realmName].main then
+      return false
   end
   local mainPC = PocketMoneyDB[realmName].main
+  if not PocketMoneyDB[realmName][mainPC] then
+      return false
+  end
   if not PocketMoneyDB[realmName][mainPC].Alts then
-    PocketMoneyDB[realmName][mainPC].Alts = {}
+      PocketMoneyDB[realmName][mainPC].Alts = {}
+      return false
   end
   return PocketMoneyDB[realmName][mainPC].Alts[name] ~= nil
 end
@@ -298,10 +363,28 @@ function PocketMoneyCore.SetAsAlt(characterName)
     return false
   end
 
-  PocketMoneyDB[realmName][characterName].AltOf = PocketMoneyDB[realmName].main
+  local mainChar = PocketMoneyDB[realmName].main
+  local charData = PocketMoneyDB[realmName][characterName]
+
+  PocketMoneyCore.mainPC = mainChar
+
+  -- Copy character data to main's Alts table
+  PocketMoneyDB[realmName][mainChar].Alts[characterName] = {
+    lifetimeGold = charData.lifetimeGold or 0,
+    lifetimeJunk = charData.lifetimeJunk or 0,
+    lifetimeBoxValue = charData.lifetimeBoxValue or 0,
+    AltOf = mainChar,
+    class = charData.class,
+    Guild = charData.Guild,
+    Main = false
+  }
+
+  -- Remove the character's separate entry
+  PocketMoneyDB[realmName][characterName] = nil
+
   PocketMoneyRankings.AuditDB()
-  print("Set " .. characterName .. " as alt of " .. PocketMoneyDB[realmName].main)
-  PocketMoneyRankings.UpdateUI()
+  print("Set " .. characterName .. " as alt of " .. mainChar)
+  QueueUIUpdate()
   return true
 end
 
@@ -325,7 +408,7 @@ function PocketMoneyCore.RemoveAlt(characterName)
   
   PocketMoneyRankings.AuditDB()
   print("Removed " .. characterName .. " as alt")
-  PocketMoneyRankings.UpdateUI()
+  QueueUIUpdate()
   return true
 end
 
@@ -377,6 +460,7 @@ function PocketMoneyCore.SetNewMain(newMainName)
 
   -- Step 4: Set up new main
   PocketMoneyDB[realmName].main = newMainName
+  PocketMoneyCore.mainPC = newMainName
   PocketMoneyDB[realmName][newMainName].main = true
   PocketMoneyDB[realmName][newMainName].Alts = {}
 
@@ -470,11 +554,14 @@ end
 
 -- Managing PP Value updates
 local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
-  local targetCharacter = playerName
-  local isAlt = PocketMoneyDB[realmName][playerName].AltOf
+  local mainChar = PocketMoneyDB[realmName].main
+  local isAlt = PocketMoneyCore.IsAltCharacter(playerName)
+  local data
   
   if isAlt then
-    targetCharacter = PocketMoneyDB[realmName][playerName].AltOf
+    data = PocketMoneyDB[realmName][mainChar].Alts[playerName]
+  else
+    data = PocketMoneyDB[realmName][playerName]
   end
 
   if lootSlotType == 1 then
@@ -486,15 +573,7 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
       elseif itemSellPrice then
         local totalValue = itemSellPrice * (quantity or 1)
         sessionJunk = sessionJunk + totalValue
-        
-        if isAlt then
-          PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk = 
-            (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeJunk or 0) + totalValue
-        else
-          PocketMoneyDB[realmName][playerName].lifetimeJunk = 
-            PocketMoneyDB[realmName][playerName].lifetimeJunk + totalValue
-        end
-        
+        data.lifetimeJunk = (data.lifetimeJunk or 0) + totalValue
         lastProcessedItems[itemLink] = true
       end
     end
@@ -502,20 +581,13 @@ local function ProcessPickpocketLoot(lootSlotType, itemLink, item, quantity)
     if item and item ~= lastProcessedMoney then
       local copper = parseMoneyString(item)
       sessionGold = sessionGold + copper
-      
-      if isAlt then
-        PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold = 
-          (PocketMoneyDB[realmName][targetCharacter].Alts[playerName].lifetimeGold or 0) + copper
-      else
-        PocketMoneyDB[realmName][playerName].lifetimeGold = PocketMoneyDB[realmName][playerName].lifetimeGold + copper
-      end
-      
+      data.lifetimeGold = (data.lifetimeGold or 0) + copper
       lastProcessedMoney = item
     end
   end
 
   if isAlt then
-    updateChecksum(targetCharacter, playerName)
+    updateChecksum(mainChar, playerName)
   else 
     updateChecksum(playerName)
   end

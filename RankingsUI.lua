@@ -87,7 +87,7 @@ end
 PocketMoneyRankings.UpdateUI = function()
   
   if not PocketMoneyDB or not PocketMoneyDB[realmName] then return end
-
+  local guild = GetGuildInfo("player")
   for _, child in ipairs({contentFrame:GetChildren()}) do
     child:Hide()
     child:SetParent(nil)
@@ -97,19 +97,11 @@ PocketMoneyRankings.UpdateUI = function()
   rankings = {}  
   titleText:SetText("Guild Pickpocket Rankings")
 
-  -- Let's start with our own rogues!
-  if PocketMoneyDB[realmName][playerName] then
-    local myData
-    if PocketMoneyDB[realmName][playerName].AltOf then
-      local mainChar = PocketMoneyDB[realmName][playerName].AltOf
-      myData = PocketMoneyDB[realmName][mainChar]
-      playerName = mainChar  -- Use main's name for display
-    else
-        myData = PocketMoneyDB[realmName][playerName]
-    end
+  if PocketMoneyDB[realmName].main then
+    local mainChar = PocketMoneyDB[realmName].main
+    local myData = PocketMoneyDB[realmName][mainChar]
     local total = (myData.lifetimeGold or 0) + (myData.lifetimeJunk or 0) + (myData.lifetimeBoxValue or 0)
     
-    -- Add alt totals if this is a main character with alts
     if myData.main and myData.Alts then
       local altsBreakdown = {}
       for altName, altData in pairs(myData.Alts) do
@@ -153,7 +145,7 @@ PocketMoneyRankings.UpdateUI = function()
     for rogueName, rogueData in pairs(PocketMoneyDB[realmName].knownRogues) do
       local total = (rogueData.gold or 0) + (rogueData.junk or 0) + (rogueData.boxValue or 0)
       if rogueData.main and rogueData.Alts then
-        local altsBreakdown = {}  -- Move this declaration inside the loop
+        local altsBreakdown = {}
         for altName, altData in pairs(rogueData.Alts) do
           local altTotalValue = (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
           total = total + altTotalValue
@@ -192,7 +184,6 @@ PocketMoneyRankings.UpdateUI = function()
     end
   else
     for rogueName, rogueData in pairs(PocketMoneyDB[realmName].knownRogues) do
-      local guild = localPlayerGuild
       if guild then
         if rogueData.Guild == guild then
           local total = (rogueData.gold or 0) + (rogueData.junk or 0) + (rogueData.boxValue or 0)
@@ -256,30 +247,36 @@ PocketMoneyRankings.UpdateUI = function()
 
     -- highlight us!
     local isOurCharacter = false
-    if PocketMoneyDB[realmName][playerName].AltOf then
-        isOurCharacter = (data.player == PocketMoneyDB[realmName][playerName].AltOf)
-    else
+    if PocketMoneyDB[realmName].main then
+      local mainChar = PocketMoneyDB[realmName].main
+      if PocketMoneyCore.IsAltCharacter(playerName) then
+        -- If we're an alt, highlight our main's entry
+        isOurCharacter = (data.player == mainChar)
+        -- Also use main's name for display
+        playerName = mainChar
+      else
+        -- If we're the main, highlight our entry
         isOurCharacter = (data.player == playerName)
+      end
     end
-
     if i % 2 == 0 then
       entryFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",  -- Added this
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
         tile = true,
         tileSize = 16,
-        edgeSize = 1,   -- Added this
-        insets = { left = 0, right = 0, top = 0, bottom = 0 }  -- Added this
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 }
       })
       entryFrame:SetBackdropColor(0.2, 0.2, 0.2, 0.3)
     else
       entryFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",  -- Added this
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
         tile = true,
         tileSize = 16,
-        edgeSize = 1,   -- Added this
-        insets = { left = 0, right = 0, top = 0, bottom = 0 }  -- Added this
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 }
       })
       entryFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.2)
     end
@@ -287,7 +284,7 @@ PocketMoneyRankings.UpdateUI = function()
     if isOurCharacter then
       entryFrame:SetBackdropBorderColor(0, 1, 0, 0.5)
     else
-      entryFrame:SetBackdropBorderColor(0, 0, 0, 0)  -- Invisible border
+      entryFrame:SetBackdropBorderColor(0, 0, 0, 0)
     end
 
     if i <= 3 then
@@ -307,13 +304,10 @@ PocketMoneyRankings.UpdateUI = function()
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       GameTooltip:AddLine(data.player .. "'s Breakdown:", 1, 0.84, 0)
       GameTooltip:AddLine(" ")
-
-      -- Display the main player's data
       GameTooltip:AddLine("Raw Gold: " .. PocketMoneyCore.FormatMoney(data.gold))
       GameTooltip:AddLine("Junk Items: " .. PocketMoneyCore.FormatMoney(data.junk))
       GameTooltip:AddLine("Junkbox Value: " .. PocketMoneyCore.FormatMoney(data.boxValue))
 
-      -- If there are alts, display their breakdown as well
       if data.alts and #data.alts > 0 then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Alts Breakdown:", 1, 0.84, 0)
@@ -327,7 +321,6 @@ PocketMoneyRankings.UpdateUI = function()
           altTotal = altTotal + (altData.gold or 0) + (altData.junk or 0) + (altData.boxValue or 0)
         end
 
-        -- Display total of alts
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Total Alt Value: " .. PocketMoneyCore.FormatMoney(altTotal), 0, 1, 0)
       end
@@ -356,6 +349,27 @@ PocketMoneyRankings.UpdateUI = function()
     goldText:SetPoint("RIGHT", -5, 0)
     goldText:SetText(PocketMoneyCore.FormatMoney(data.total))
   end
+
+  local totalHeight = #rankings * 25
+  scrollChild:SetHeight(totalHeight)
+
+  -- Show/hide scrollbar based on content height
+  if totalHeight <= scrollFrame:GetHeight() then
+    -- Content fits, hide scrollbar
+    local scrollBar = scrollFrame.ScrollBar or _G[scrollFrame:GetName().."ScrollBar"]
+    if scrollBar then
+      scrollBar:Hide()
+    end
+  else
+    -- Content doesn't fit, show scrollbar
+    local scrollBar = scrollFrame.ScrollBar or _G[scrollFrame:GetName().."ScrollBar"]
+    if scrollBar then
+      scrollBar:Show()
+    end
+  end
+
+  -- Reset scroll position to top
+  scrollFrame:SetVerticalScroll(0)
 
   RankingsUI:RegisterEvent("PLAYER_REGEN_DISABLED")
   RankingsUI:SetScript("OnEvent", function(self, event)

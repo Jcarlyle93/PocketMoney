@@ -171,9 +171,9 @@ function PocketMoneyPopoutUI.Update()
   local playerName = UnitName("player")
   local realmName = GetRealmName()
   local statsData
+  local mainChar = PocketMoneyDB[realmName].main
   
   if PocketMoneyCore.IsAltCharacter(playerName) then
-      local mainChar = PocketMoneyDB[realmName][playerName].AltOf
       statsData = PocketMoneyDB[realmName][mainChar].Alts[playerName]
   else
       statsData = PocketMoneyDB[realmName][playerName]
