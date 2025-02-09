@@ -437,6 +437,7 @@ end
 
 -- Recieving Data From Other Players
 function PocketMoneyRankings.ProcessUpdate(sender, messageData, isChunked, chunkInfo)
+  print(sender, messageData)
   if isChunked then
     local complete = MessageBuffers:AddChunk(sender, chunkInfo.number, chunkInfo.total, messageData)
     if not complete then return end -- Wait for more chunks
@@ -456,6 +457,7 @@ function PocketMoneyRankings.ProcessUpdate(sender, messageData, isChunked, chunk
   end
 
   if not messageData or type(messageData) ~= "table" then
+    print()
     print("Invalid message data from:", sender)
     return
   end
